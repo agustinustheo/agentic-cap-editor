@@ -1,8 +1,8 @@
-# claude-code-cap-editor
+# agentic-cap-editor
 
-A TypeScript toolkit + Claude Code skill for editing [Cap](https://cap.so) screen recordings non-destructively from the CLI. Operates directly on `.cap` bundles by mutating `project-config.json` — Cap's own editor reads the same file, so any edit is immediately visible in Cap.app at export time.
+A TypeScript toolkit + agent workflow for editing [Cap](https://cap.so) screen recordings non-destructively from the CLI. Operates directly on `.cap` bundles by mutating `project-config.json` — Cap's own editor reads the same file, so any edit is immediately visible in Cap.app at export time.
 
-The toolkit is designed so an AI agent (Claude Code) can read a recording, decide where to cut and where to zoom, and apply those edits as JSON — without ever re-encoding video or watching frames in sequence.
+The toolkit is designed so an AI agent can read a recording, decide where to cut and where to zoom, and apply those edits as JSON — without ever re-encoding video or watching frames in sequence.
 
 ## Why this exists
 
@@ -48,7 +48,7 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm analyze:cursor <cap>` | Cursor move/click counts per recording segment |
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
-| `pnpm frame <cap> --at T` | Extract a single PNG so Claude can view it via Read |
+| `pnpm frame <cap> --at T` | Extract a single PNG so an agent can inspect the frame visually |
 | `pnpm validate <cap>` | Verify timeline, zooms, captions, omitted segments, and edited-folder hygiene |
 
 ### Suggest (dry-run by default, `--apply` to commit)
@@ -93,14 +93,16 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 │   ├── cut.ts
 │   ├── frame.ts
 │   └── render.ts
-├── .claude/skills/
+├── .codex/skills/
 │   └── cap-merge/
 │       └── SKILL.md        # procedure for merging N .cap recordings into one snappy video
+├── .claude -> .codex       # Claude compatibility symlink
 ├── .repos/Cap/             # upstream Cap source as a git submodule — authoritative schema
 ├── recordings/             # gitignored working directory
 │   ├── originals/          # untouched source bundles
 │   └── edited/             # working copies — all edits land here
-├── CLAUDE.md               # workflow rules for Claude Code in this repo
+├── AGENTS.md               # workflow rules for agents in this repo
+├── CLAUDE.md -> AGENTS.md  # Claude compatibility symlink
 ├── LICENSE                 # MIT
 ├── package.json
 └── tsconfig.json
@@ -143,18 +145,18 @@ The two most-edited arrays:
 8. `pnpm validate recordings/edited/Demo.cap --expect-edited` — verify final timeline, zooms, captions, and no stray helper files.
 9. `pnpm render recordings/edited/Demo.cap` — open in Cap.app to preview / export.
 
-To merge multiple takes into one bundle first, use `pnpm merge`. See `.claude/skills/cap-merge/SKILL.md` for the full procedure.
+To merge multiple takes into one bundle first, use `pnpm merge`. See `.codex/skills/cap-merge/SKILL.md` for the full procedure.
 
 ## How the AI part works
 
-Claude Code doesn't watch the video frame-by-frame. It uses four data streams extracted from the `.cap`:
+An agent doesn't watch the video frame-by-frame. It uses four data streams extracted from the `.cap`:
 
-1. **Cursor track** — already in the bundle as `cursor.json`. Tells Claude exactly where clicks happen and where to put zooms.
+1. **Cursor track** — already in the bundle as `cursor.json`. Tells the agent exactly where clicks happen and where to put zooms.
 2. **Audio silence** — ffmpeg `silencedetect` returns `(start, end)` of every quiet gap.
-3. **Transcript** — whisper.cpp produces `(start, end, text)` segments. Lets Claude snap cuts to clause boundaries instead of mid-word.
-4. **Keyframes on demand** — when Claude is uncertain, it runs `pnpm frame <cap> --at 12.5 --out /tmp/check.png` and opens the PNG with the Read tool (Claude is multimodal — it can see one frame at a time without streaming the whole video).
+3. **Transcript** — whisper.cpp produces `(start, end, text)` segments. Lets the agent snap cuts to clause boundaries instead of mid-word.
+4. **Keyframes on demand** — when the agent is uncertain, it runs `pnpm frame <cap> --at 12.5 --out /tmp/check.png` and opens the PNG with an image viewer or multimodal read tool.
 
-`CLAUDE.md` at the repo root teaches Claude Code the workflow rules. `.claude/skills/cap-merge/SKILL.md` adds a discoverable skill for merging multiple recordings.
+`AGENTS.md` at the repo root teaches agents the workflow rules, with `CLAUDE.md` kept as a compatibility symlink. `.codex/skills/cap-merge/SKILL.md` adds a discoverable skill for merging multiple recordings, with `.claude` kept as a compatibility symlink.
 
 ## Dependencies
 
