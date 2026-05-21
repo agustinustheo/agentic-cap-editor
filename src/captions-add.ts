@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { loadBundle, saveBundle, ensureTimeline } from "./lib/cap.ts";
 import { recordingSegmentPaths } from "./lib/cursor.ts";
 import { transcribe } from "./lib/whisper.ts";
+import { refineCaptions } from "./lib/captions-refine.ts";
 import { parseArgs, requirePositional, num } from "./lib/cli.ts";
 
 const { positionals, values } = parseArgs({
@@ -11,15 +12,17 @@ const { positionals, values } = parseArgs({
 	"whisper-bin": { type: "string" },
 	language: { type: "string" },
 	refresh: { type: "boolean", default: false },
-	"min-gap": { type: "string", default: "0.25" },
-	"max-chars": { type: "string", default: "80" },
+	"max-chars": { type: "string", default: "60" },
+	"max-dur": { type: "string", default: "5.0" },
+	"paragraph-gap": { type: "string", default: "0.6" },
 	"dry-run": { type: "boolean", default: false },
 	"no-backup": { type: "boolean", default: false },
 });
 
 const capPath = requirePositional(positionals, 0, "path-to.cap");
-const minGap = num(values, "min-gap") ?? 0.25;
-const maxChars = num(values, "max-chars") ?? 80;
+const maxChars = num(values, "max-chars") ?? 60;
+const maxDurSec = num(values, "max-dur") ?? 5.0;
+const paragraphGap = num(values, "paragraph-gap") ?? 0.6;
 
 const bundle = await loadBundle(capPath);
 const recordings = recordingSegmentPaths(bundle);
@@ -50,9 +53,11 @@ interface RawCaption {
 	startSec: number;
 	endSec: number;
 	text: string;
+	recordingSegment?: number;
 }
 
 const tsegs = timelineWithOffsets();
+const hasTimeline = tsegs.length > 0;
 const allCaptions: RawCaption[] = [];
 let droppedByCut = 0;
 
@@ -72,7 +77,16 @@ for (let i = 0; i < recordings.length; i++) {
 
 	for (const s of transcript.segments) {
 		if (tsForRec.length === 0) {
-			allCaptions.push({ startSec: s.startSec, endSec: s.endSec, text: s.text });
+			if (hasTimeline) {
+				droppedByCut++;
+				continue;
+			}
+			allCaptions.push({
+				startSec: s.startSec,
+				endSec: s.endSec,
+				text: s.text,
+				recordingSegment: i,
+			});
 			continue;
 		}
 		let emitted = false;
@@ -82,7 +96,12 @@ for (let i = 0; i < recordings.length; i++) {
 			if (ce <= cs) continue;
 			const outStart = ts.outputOffset + (cs - ts.start) / ts.timescale;
 			const outEnd = ts.outputOffset + (ce - ts.start) / ts.timescale;
-			allCaptions.push({ startSec: outStart, endSec: outEnd, text: s.text });
+			allCaptions.push({
+				startSec: outStart,
+				endSec: outEnd,
+				text: s.text,
+				recordingSegment: i,
+			});
 			emitted = true;
 		}
 		if (!emitted) droppedByCut++;
@@ -98,31 +117,19 @@ interface CaptionSegment {
 	words: never[];
 }
 
-const merged: CaptionSegment[] = [];
-for (const seg of allCaptions) {
-	const last = merged[merged.length - 1];
-	if (
-		last &&
-		seg.startSec - last.end < minGap &&
-		last.text.length + seg.text.length + 1 <= maxChars &&
-		last.text !== seg.text
-	) {
-		last.end = seg.endSec;
-		last.text = `${last.text} ${seg.text}`.trim();
-		continue;
-	}
-	if (last && last.text === seg.text && seg.startSec - last.end < 0.05) {
-		last.end = seg.endSec;
-		continue;
-	}
-	merged.push({
-		id: randomUUID(),
-		start: seg.startSec,
-		end: seg.endSec,
-		text: seg.text,
-		words: [],
-	});
-}
+const refined = refineCaptions(allCaptions, {
+	maxChars,
+	maxDurSec,
+	gapForParagraphSec: paragraphGap,
+});
+
+const merged: CaptionSegment[] = refined.map((c) => ({
+	id: randomUUID(),
+	start: c.startSec,
+	end: c.endSec,
+	text: c.text,
+	words: [],
+}));
 
 const captionsData = {
 	segments: merged,

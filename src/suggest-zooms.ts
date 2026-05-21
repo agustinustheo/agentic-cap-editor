@@ -38,6 +38,49 @@ if (mode !== "auto" && mode !== "manual") {
 const bundle = await loadBundle(capPath);
 const segments = recordingSegmentPaths(bundle);
 
+interface TimelineSeg {
+	recordingSegment: number;
+	timescale: number;
+	start: number;
+	end: number;
+	outputOffset: number;
+}
+
+function timelineWithOffsets(): TimelineSeg[] {
+	const segs = bundle.config.timeline?.segments ?? [];
+	const out: TimelineSeg[] = [];
+	let acc = 0;
+	for (const s of segs) {
+		const outDur = (s.end - s.start) / s.timescale;
+		out.push({ ...s, outputOffset: acc });
+		acc += outDur;
+	}
+	return out;
+}
+
+function translateToOutput(
+	tsegs: TimelineSeg[],
+	recordingIdx: number,
+	recordingTimeSec: number,
+): number | null {
+	for (const ts of tsegs) {
+		if (ts.recordingSegment !== recordingIdx) continue;
+		if (recordingTimeSec >= ts.start && recordingTimeSec <= ts.end) {
+			return ts.outputOffset + (recordingTimeSec - ts.start) / ts.timescale;
+		}
+	}
+	return null;
+}
+
+const tsegs = timelineWithOffsets();
+const timelineDuration =
+	tsegs.length > 0
+		? tsegs.reduce(
+				(max, s) => Math.max(max, s.outputOffset + (s.end - s.start) / s.timescale),
+				0,
+			)
+		: null;
+
 interface ClickPoint {
 	timeSec: number;
 	x: number;
@@ -45,7 +88,9 @@ interface ClickPoint {
 }
 
 const points: ClickPoint[] = [];
-for (const seg of segments) {
+let droppedClicks = 0;
+for (let i = 0; i < segments.length; i++) {
+	const seg = segments[i]!;
 	if (!seg.cursorPath) continue;
 	const events = await loadCursorEvents(seg.cursorPath);
 	if (!events) continue;
@@ -53,7 +98,17 @@ for (const seg of segments) {
 		if (!c.down) continue;
 		const pos = cursorPositionAt(events, c.time_ms);
 		if (!pos) continue;
-		points.push({ timeSec: c.time_ms / 1000, x: pos.x, y: pos.y });
+		const recTime = c.time_ms / 1000;
+		if (tsegs.length === 0) {
+			points.push({ timeSec: recTime, x: pos.x, y: pos.y });
+			continue;
+		}
+		const outTime = translateToOutput(tsegs, i, recTime);
+		if (outTime === null) {
+			droppedClicks++;
+			continue;
+		}
+		points.push({ timeSec: outTime, x: pos.x, y: pos.y });
 	}
 }
 points.sort((a, b) => a.timeSec - b.timeSec);
@@ -81,7 +136,9 @@ for (const p of points) {
 const proposed: ZoomSegment[] = [];
 for (const cl of clusters) {
 	const start = Math.max(0, cl.firstTime - lead);
-	const end = cl.lastTime + hold;
+	const unclampedEnd = cl.lastTime + hold;
+	const end = timelineDuration === null ? unclampedEnd : Math.min(unclampedEnd, timelineDuration);
+	if (end - start < 0.2) continue;
 	const seg: ZoomSegment = {
 		start,
 		end,
@@ -102,9 +159,11 @@ for (const cl of clusters) {
 }
 
 if (values.json) {
-	console.log(JSON.stringify({ clusters: clusters.length, proposed }, null, 2));
+	console.log(JSON.stringify({ clusters: clusters.length, proposed, droppedClicks }, null, 2));
 } else if (!values.apply) {
-	console.log(`clicks: ${points.length}, clusters: ${clusters.length}`);
+	console.log(
+		`clicks: ${points.length} (${droppedClicks} dropped by cuts), clusters: ${clusters.length}`,
+	);
 	console.log(`proposed zooms (${proposed.length}):`);
 	for (const z of proposed) {
 		const m =
