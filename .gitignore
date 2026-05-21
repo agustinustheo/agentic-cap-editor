@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Build / cache
+dist/
+build/
+out/
+.tsbuildinfo
+*.tsbuildinfo
+.cache/
+.parcel-cache/
+.turbo/
+.next/
+
+# TypeScript / tsx
+.tsx/
+
+# Editors
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.orig
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Recordings — both unedited originals and edits live here, never commit
+/recordings/*
+!/recordings/.gitkeep
+!/recordings/README.md
+
+# Stray frame extracts and transcripts (kept inside .cap bundles too)
+/*.png
+/frame_at_*.png
+/.transcripts/

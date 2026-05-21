@@ -1,0 +1,33 @@
+{
+	"name": "claude-code-cap-editor",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"inspect": "tsx src/inspect.ts",
+		"zoom:add": "tsx src/zoom-add.ts",
+		"zoom:list": "tsx src/zoom-list.ts",
+		"zoom:remove": "tsx src/zoom-remove.ts",
+		"cut": "tsx src/cut.ts",
+		"analyze:silences": "tsx src/analyze-silences.ts",
+		"analyze:cursor": "tsx src/analyze-cursor.ts",
+		"analyze:clicks": "tsx src/analyze-clicks.ts",
+		"analyze:transcript": "tsx src/analyze-transcript.ts",
+		"frame": "tsx src/frame.ts",
+		"suggest:cuts": "tsx src/suggest-cuts.ts",
+		"suggest:zooms": "tsx src/suggest-zooms.ts",
+		"captions:add": "tsx src/captions-add.ts",
+		"render": "tsx src/render.ts",
+		"render:build": "cargo build --release --example export-cli -p cap-export --manifest-path .repos/Cap/Cargo.toml",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"tsx": "^4.19.0",
+		"typescript": "^5.6.0"
+	}
+}
