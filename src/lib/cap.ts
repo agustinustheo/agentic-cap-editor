@@ -1,6 +1,7 @@
 import { readFile, writeFile, copyFile, stat } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { spawn } from "node:child_process";
+import { isCapAppRunning } from "./cap-app.ts";
 
 export type ZoomMode = "Auto" | { Manual: { x: number; y: number } };
 
@@ -77,6 +78,11 @@ export async function saveBundle(
 	bundle: CapBundle,
 	{ backup = true }: { backup?: boolean } = {},
 ): Promise<void> {
+	if (await isCapAppRunning()) {
+		console.error(
+			"warning: Cap.app appears to be running. Quit Cap before mutating a bundle, or it may overwrite project-config.json with stale in-memory state.",
+		);
+	}
 	const configPath = join(bundle.path, "project-config.json");
 	if (backup) {
 		const exists = await stat(configPath).then(
