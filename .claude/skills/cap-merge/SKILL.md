@@ -7,7 +7,7 @@ description: Merge multiple Cap (.cap) recordings into a single snappy product v
 
 A repeatable procedure for taking N source `.cap` bundles and producing one merged, edited `.cap` bundle that is snappy, captioned, and ready to export from Cap.app.
 
-This skill assumes the toolkit in this repo (`pnpm inspect`, `pnpm analyze:*`, `pnpm suggest:*`, `pnpm merge`) is available. If `pnpm merge` is missing, the script must be written first — see "Implementation: src/merge.ts" below.
+This skill assumes the toolkit in this repo (`pnpm inspect`, `pnpm analyze:*`, `pnpm suggest:*`, `pnpm merge`, `pnpm validate`, `pnpm edit:snappy`) is available.
 
 ## Inputs
 
@@ -30,6 +30,7 @@ A new directory `recordings/edited/<Name>.cap/` with the same shape, where:
 ## Procedure
 
 ### 1. Orient
+- Quit Cap.app before mutating anything. Cap can auto-save stale GUI state over script edits.
 - `pnpm inspect <each-source.cap>` — confirm each is studio, count segments, get durations.
 - If any source is an instant recording (no `segments[]`, no `display{}` — has only top-level `fps`), abort with an error: the toolkit only merges studio bundles. The user can re-record with Studio mode.
 
@@ -47,25 +48,29 @@ Read every transcript. Identify:
 Write the plan inline before executing it. The plan is the gate — once it's committed, the merge is mechanical.
 
 ### 4. Merge structurally
+- Prefer the high-level command for first-pass edits:
+  `pnpm edit:snappy <source1.cap> <source2.cap> ... --name "<Name>"`
+- If you need custom segment filtering, use `pnpm merge` directly, then continue with the manual edit steps below.
 - `pnpm merge <name> <source1.cap> <source2.cap> ...` builds the new bundle with all source segments included.
 - Optionally pass `--include <i,j,k>` per source to filter to specific segments (recommended after step 3).
 - The merge script copies content, renumbers segments, prefixes cursor IDs, rewrites each segment's `cursor.json`, and writes a default `project-config.json` with one pristine `TimelineSegment` per included recording-segment.
 
 ### 5. Apply edits
-- `pnpm captions:add recordings/edited/<Name>.cap` — write captions first while timeline is still pristine.
 - `pnpm suggest:cuts recordings/edited/<Name>.cap --clause-aware --apply` — remove inter-clause silences for snappiness.
+- `pnpm captions:add recordings/edited/<Name>.cap` — write captions against the current trimmed timeline.
 - `pnpm suggest:zooms recordings/edited/<Name>.cap --apply` — punch in around click clusters.
 - `pnpm inspect recordings/edited/<Name>.cap` — verify final timeline + zooms + captions.
+- `pnpm validate recordings/edited/<Name>.cap --expect-edited` — mandatory final gate. It catches stale Cap overwrites, out-of-bounds captions/zooms, omitted recording segments, and helper files left beside `.cap` bundles.
 
 ### 6. Hand off
-Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) and let the user preview / export. Or `--cli` once `pnpm render:build` has run.
+Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) only after validation passes. Let the user preview / export, or use `--cli` once `pnpm render:build` has run.
 
 ## Decision rules
 
 - **When in doubt about a take, keep it.** Cuts can be added later; restoring a dropped segment requires re-merge.
 - **Don't cut across cursor activity.** If `pnpm analyze:clicks` shows a click within a proposed cut window, narrow the cut to leave at least 0.5s before and after the click.
 - **Auto zoom mode is preferred** for click-driven punch-ins (uses cursor data Cap already has). Use `--mode manual` only if cursor data is missing or the target isn't where the cursor is.
-- **Caption alignment is recording-time.** If you must add cuts before captions, run `captions:add` against an unedited copy and then port the timing manually — caption translation through a non-pristine timeline is not yet implemented.
+- **Caption alignment follows the current timeline.** `captions:add` skips transcript ranges and recording segments omitted by cuts/trim, so regenerate captions after any substantial timeline change.
 
 ## Failure modes and recovery
 
@@ -74,6 +79,8 @@ Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) a
 - **Cursor ID collision** → the merge script must prefix by source bundle index; if it doesn't, the output cursors render with the wrong sprite. Verify by spot-checking one segment's `cursor.json` against `recording-meta.json::cursors`.
 - **Timeline doesn't initialize** → `pnpm suggest:cuts --apply` will seed it if empty; if pre-existing, it should already have 1 pristine TimelineSegment per recording-segment.
 - **A source bundle has zero segments** → likely an `InProgress` or `Failed` recording. Skip with a warning.
+- **Cap.app overwrote edits** → quit Cap.app, rerun the edit script, then `pnpm validate --expect-edited` before opening Cap again.
+- **Helper JSON in `recordings/edited/`** → move/delete it. Keep keep-range JSON in `/tmp`; top-level `recordings/edited/` should contain `.cap` bundles only.
 
 ## Implementation: src/merge.ts
 

@@ -29,14 +29,10 @@ mkdir -p ~/.cache/whisper && \
 #    ~/Library/Application Support/so.cap.desktop/recordings/).
 cp -R ~/Library/Application\ Support/so.cap.desktop/recordings/Demo.cap recordings/originals/
 
-# 3. Make an editable copy and run the full pipeline.
-cp -R "recordings/originals/Demo.cap" "recordings/edited/Demo.cap"
-pnpm inspect           "recordings/edited/Demo.cap"
-pnpm analyze:transcript "recordings/edited/Demo.cap"
-pnpm captions:add      "recordings/edited/Demo.cap"
-pnpm suggest:cuts      "recordings/edited/Demo.cap" --clause-aware --apply
-pnpm suggest:zooms     "recordings/edited/Demo.cap" --apply
-pnpm render            "recordings/edited/Demo.cap"   # opens in Cap.app on macOS
+# 3. Let the agent-safe pipeline create the edited project.
+pnpm edit:snappy "recordings/originals/Demo.cap" --name "Demo Commercial"
+pnpm validate "recordings/edited/Demo Commercial.cap" --expect-edited
+pnpm render "recordings/edited/Demo Commercial.cap" --via-app
 ```
 
 ## Commands
@@ -53,6 +49,7 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
 | `pnpm frame <cap> --at T` | Extract a single PNG so Claude can view it via Read |
+| `pnpm validate <cap>` | Verify timeline, zooms, captions, omitted segments, and edited-folder hygiene |
 
 ### Suggest (dry-run by default, `--apply` to commit)
 
@@ -71,6 +68,8 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm cut <cap>` | Cut a single range from the timeline |
 | `pnpm captions:add <cap>` | Write transcript as Cap captions |
 | `pnpm merge <name> <cap1> [<cap2> ...]` | Merge N source bundles into one (with optional `--include` filters per source) |
+| `pnpm trim <cap>` | Replace timeline with explicit keep ranges |
+| `pnpm edit:snappy <cap...>` | High-level first pass: copy/merge, cut, caption, zoom, validate |
 
 ### Render
 
@@ -138,10 +137,10 @@ The two most-edited arrays:
 2. `cp -R recordings/originals/Demo.cap recordings/edited/Demo.cap` — work on a copy.
 3. `pnpm inspect recordings/edited/Demo.cap` — confirm duration, timeline state.
 4. `pnpm analyze:transcript recordings/edited/Demo.cap` — generate transcript (cached).
-5. `pnpm captions:add recordings/edited/Demo.cap` — burn in captions **before** cuts.
-6. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware --apply` — tighten.
+5. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware --apply` — tighten.
+6. `pnpm captions:add recordings/edited/Demo.cap` — add captions after trimming; omitted ranges are skipped.
 7. `pnpm suggest:zooms recordings/edited/Demo.cap --apply` — punch in on click clusters.
-8. `pnpm inspect recordings/edited/Demo.cap` — verify final timeline + zooms.
+8. `pnpm validate recordings/edited/Demo.cap --expect-edited` — verify final timeline, zooms, captions, and no stray helper files.
 9. `pnpm render recordings/edited/Demo.cap` — open in Cap.app to preview / export.
 
 To merge multiple takes into one bundle first, use `pnpm merge`. See `.claude/skills/cap-merge/SKILL.md` for the full procedure.
@@ -166,7 +165,7 @@ Claude Code doesn't watch the video frame-by-frame. It uses four data streams ex
 
 ## Limits / known caveats
 
-- **Caption alignment after cuts.** Captions are written in pristine concat-output time. Adding cuts *after* `captions:add` leaves captions misaligned with the trimmed playback; the script warns when the timeline isn't pristine. Workflow: captions first, then cuts.
+- **Cap.app can overwrite script edits.** Quit Cap before every mutation. `edit:snappy` closes it automatically, and `validate` warns if it is running.
 - **`render:build` compiles a large chunk of Cap.** Cap's `cap-export` crate pulls in `cap-rendering`, `cap-editor`, `cap-media`, etc. First build is 5–10 minutes and needs system FFmpeg dev libs.
 - **`merge` cursor namespacing** prefixes IDs with `b<sourceIndex>_`. Sprites are copied and renamed under `content/cursors/`. Each segment's `cursor.json` is rewritten to use the new IDs so cross-bundle ID collisions can't render the wrong sprite.
 - **Partial TS types**. `src/lib/cap.ts` only types the fields we mutate. Always cross-check against `.repos/Cap/crates/project/src/{configuration,meta}.rs` when wiring up a new edit kind — that's the source of truth, and `serde` rename rules differ by struct.

@@ -10,7 +10,7 @@ Upstream Cap source lives in `.repos/Cap` (git submodule). The authoritative sha
 - `.repos/Cap/crates/project/src/configuration.rs` — `ProjectConfiguration`, `TimelineConfiguration`, `TimelineSegment`, `ZoomSegment`, etc. (serde `rename_all = "camelCase"`)
 - `.repos/Cap/crates/project/src/meta.rs` — `RecordingMeta`, `StudioRecordingMeta`, `InstantRecordingMeta`
 
-When in doubt about a field name or shape, read the Rust source — it is the source of truth, not the TS types in `src/lib/cap.ts` (which are intentionally partial: we only type fields we manipulate, and pass through the rest).
+When in doubt about a field name or shape, read the Rust source. It is the source of truth, not the TS types in `src/lib/cap.ts` (which are intentionally partial: we only type fields we manipulate, and pass through the rest).
 
 ## Anatomy of a `.cap` bundle
 
@@ -44,8 +44,12 @@ All scripts take the `.cap` path as the first positional arg. Mutating scripts s
 pnpm inspect path/to/Recording.cap
 pnpm inspect path/to/Recording.cap --json
 
+# Verify the project is internally consistent before saying "done".
+pnpm validate path/to/Recording.cap
+pnpm validate path/to/Recording.cap --expect-edited
+
 # Detect silent regions for cut candidates.
-pnpm analyze:silences path/to/Recording.cap --noise -30 --min-duration 0.4
+pnpm analyze:silences path/to/Recording.cap --noise=-30 --min-duration 0.4
 pnpm analyze:silences path/to/Recording.cap --json
 
 # Summarize cursor data (move/click counts per recording segment).
@@ -82,7 +86,7 @@ pnpm suggest:zooms path/to/Recording.cap --amount 1.8 --apply
 pnpm suggest:zooms path/to/Recording.cap --mode manual --apply   # use cursor x/y
 
 # Burn the transcript in as Cap captions (writes captions.json + timeline.captionSegments).
-# Run this BEFORE cuts — caption times are in pristine recording-concat time.
+# Safe before or after cuts; omitted ranges and omitted recording segments are skipped.
 pnpm captions:add path/to/Recording.cap
 pnpm captions:add path/to/Recording.cap --dry-run
 ```
@@ -114,6 +118,15 @@ pnpm zoom:remove path/to/Recording.cap 2
 
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0 --dry-run
+
+# Replace the timeline with explicit keep ranges. Keep helper JSON in /tmp,
+# never beside .cap bundles in recordings/edited/.
+pnpm trim path/to/Recording.cap --from-json /tmp/keep-ranges.json
+
+# One-command first pass for future agents. Creates/merges under recordings/edited,
+# closes Cap.app, applies cuts/captions/zooms, then validates.
+pnpm edit:snappy path/to/Recording.cap --name "Recording Commercial"
+pnpm edit:snappy path/to/A.cap path/to/B.cap --name "Merged Commercial"
 ```
 
 `pnpm typecheck` runs `tsc --noEmit` across `src/`. Run this before declaring a task complete.
@@ -132,17 +145,26 @@ Always copy first so the original stays pristine: `cp -R recordings/originals/De
 
 ## End-to-end "make it snappy" recipe
 
+Fast path:
+
+1. `pnpm edit:snappy recordings/originals/Demo.cap --name "Demo Commercial"` — copy into `recordings/edited/`, tighten, caption, zoom, and validate.
+2. `pnpm validate "recordings/edited/Demo Commercial.cap" --expect-edited` — rerun after any manual tweak.
+3. `pnpm render "recordings/edited/Demo Commercial.cap" --via-app` — open in Cap.app only after validation.
+
+Manual path:
+
 1. `cp -R recordings/originals/Demo.cap recordings/edited/Demo.cap` — work on a copy.
 2. `pnpm inspect recordings/edited/Demo.cap` — confirm duration, timeline state.
 3. `pnpm analyze:transcript recordings/edited/Demo.cap` — generate transcript (cached).
-4. `pnpm captions:add recordings/edited/Demo.cap` — burn in captions BEFORE cuts.
-5. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware` — review proposed cuts.
-6. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware --apply` — tighten.
+4. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware` — review proposed cuts.
+5. `pnpm suggest:cuts recordings/edited/Demo.cap --clause-aware --apply` — tighten.
+6. `pnpm captions:add recordings/edited/Demo.cap` — add captions mapped to the current timeline.
 7. `pnpm analyze:clicks recordings/edited/Demo.cap` — confirm where the action is.
 8. `pnpm suggest:zooms recordings/edited/Demo.cap` — review zoom plan.
 9. `pnpm suggest:zooms recordings/edited/Demo.cap --apply` — punch in on each click cluster.
 10. `pnpm inspect recordings/edited/Demo.cap` — verify final timeline + zoom layout.
-11. `pnpm render recordings/edited/Demo.cap` — opens in Cap.app to preview/export, or pass `--cli` once `render:build` has run.
+11. `pnpm validate recordings/edited/Demo.cap --expect-edited` — catch stale Cap overwrites, bad bounds, caption leaks, and stray helper files.
+12. `pnpm render recordings/edited/Demo.cap` — opens in Cap.app to preview/export, or pass `--cli` once `render:build` has run.
 
 If any individual proposal looks wrong, sample a keyframe with `pnpm frame <cap> --at T --out /tmp/check.png` and Read the PNG to decide what to do manually.
 
@@ -152,7 +174,12 @@ Cap can record multiple clips and stitch them into one project (`MultipleSegment
 
 - `analyze:silences`, `analyze:cursor`, `analyze:clicks`, `analyze:transcript` run per recording segment and report per-segment results.
 - `suggest:cuts` and `captions:add` initialize the timeline (when empty) with one `TimelineSegment` per recording in order, then map silences/transcript from recording-time into the concatenated output time before applying. So the first recipe step above works as-is for multi-segment.
-- `captions:add` writes captions in the pristine concat-output time and warns if the timeline already has non-pristine edits.
+- `captions:add` writes captions against the current timeline. If a recording segment has been intentionally omitted from the timeline, its transcript is dropped instead of leaking into output time zero.
+- `validate --expect-edited` is mandatory before final handoff. It catches exactly the failure modes agents miss: Cap.app overwriting the project back to raw duration, zoom/caption ranges past the end, omitted recording segments, and helper files accidentally left in `recordings/edited/`.
+
+## Critical: close Cap.app before mutating
+
+Cap.app appears to auto-save its in-memory project state when the bundle is open. If you run any mutating script (`suggest:cuts --apply`, `suggest:zooms --apply`, `captions:add`, `zoom:add`, `zoom:remove`, `cut`, `trim`, `merge`) while Cap.app has the same bundle open, **Cap.app may overwrite your edits with its stale state when the user scrubs the timeline or clicks anything**. Always `Cmd+Q` Cap.app first, run the scripts, then `open <cap>` to preview.
 
 ## External deps
 
@@ -179,6 +206,8 @@ Cap can record multiple clips and stitch them into one project (`MultipleSegment
 6. **Cuts are non-destructive splits.** A cut on a single-segment timeline becomes two segments around the gap. Re-cutting the same range is a no-op (idempotent for fully-covered ranges).
 7. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.
 8. **Don't touch `recording-meta.json` or `content/`.** Those are recording artifacts. Only `project-config.json` is editable.
+9. **Always `pnpm validate --expect-edited` before final.** If validation warns about omitted segments or Cap.app running, say so explicitly or fix it.
+10. **No helper files in `recordings/edited/`.** Use `/tmp/*.json` for keep ranges and screenshots. The user expects only `.cap` bundles at the top level.
 
 ## When to extend the toolkit
 
