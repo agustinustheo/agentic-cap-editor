@@ -1,0 +1,3 @@
+[submodule ".repos/Cap"]
+	path = .repos/Cap
+	url = git@github.com:CapSoftware/Cap.git
