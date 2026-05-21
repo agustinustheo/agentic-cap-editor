@@ -21,6 +21,7 @@
 		"suggest:cuts": "tsx src/suggest-cuts.ts",
 		"suggest:zooms": "tsx src/suggest-zooms.ts",
 		"captions:add": "tsx src/captions-add.ts",
+		"merge": "tsx src/merge.ts",
 		"render": "tsx src/render.ts",
 		"render:build": "cargo build --release --example export-cli -p cap-export --manifest-path .repos/Cap/Cargo.toml",
 		"typecheck": "tsc --noEmit"
