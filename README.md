@@ -2,7 +2,7 @@
 
 A TypeScript toolkit + agent workflow for editing [Cap](https://cap.so) screen recordings from the CLI. The normal path is non-destructive: mutate `project-config.json`, leave raw media alone, and let Cap apply those edits at preview/export time. When the Cap.app UI itself must stop showing the raw recording length, use the explicit bake step to create a new trimmed/speed-adjusted `.cap` copy.
 
-Audio cleanup is the exception. Cap's project config exposes coarse audio controls like `audio.improve`, but not a real voice-isolation pipeline. `pnpm audio:sanitize` therefore creates a new `.cap` copy by default and re-encodes microphone audio with ffmpeg voice-focused filters so we can reduce background noise and bring speech forward.
+Audio cleanup is the exception. Cap's project config exposes coarse audio controls like `audio.improve`, but not a real voice-isolation pipeline. `pnpm audio:sanitize` therefore creates a new `.cap` copy by default and re-encodes microphone audio with speech-focused tooling so we can reduce background noise and bring speech forward. The main `voice` preset now uses the DeepFilterNet native binary by default, with ffmpeg `arnndn` retained as a fallback engine.
 
 The toolkit is designed so an AI agent can read a recording, decide where to cut and where to zoom, and apply those edits as JSON — without ever re-encoding video or watching frames in sequence.
 

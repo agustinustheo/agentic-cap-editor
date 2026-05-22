@@ -67,7 +67,13 @@ pnpm analyze:transcript path/to/Recording.cap --refresh --json
 
 # Sanitize microphone audio in a copied bundle to reduce noise and focus on speech.
 pnpm audio:sanitize path/to/Recording.cap
+pnpm audio:sanitize path/to/Recording.cap --preset voice          # DeepFilterNet voice cleanup (recommended)
 pnpm audio:sanitize path/to/Recording.cap --preset strong
+pnpm audio:sanitize path/to/Recording.cap --preset broadcast      # most aggressive cleanup
+pnpm audio:sanitize path/to/Recording.cap --atten-lim-db 28
+pnpm audio:sanitize path/to/Recording.cap --post-filter
+pnpm audio:sanitize path/to/Recording.cap --engine ffmpeg --mix 0.9
+pnpm audio:sanitize path/to/Recording.cap --engine ffmpeg --model /path/to/std.rnnn
 pnpm audio:sanitize path/to/Recording.cap --include-system-audio
 
 # Extract a single frame at time T as a PNG so you can SEE the video.
@@ -120,10 +126,13 @@ pnpm render path/to/Recording.cap --cli --fps 30 --compression Maximum
 pnpm audio:sanitize recordings/edited/Demo.cap
 pnpm audio:sanitize recordings/edited/Demo.cap --preset voice
 pnpm audio:sanitize recordings/edited/Demo.cap --preset strong
+pnpm audio:sanitize recordings/edited/Demo.cap --preset broadcast
+pnpm audio:sanitize recordings/edited/Demo.cap --post-filter --atten-lim-db 28
+pnpm audio:sanitize recordings/edited/Demo.cap --engine ffmpeg --preset voice
 pnpm audio:sanitize recordings/edited/Demo.cap --in-place
 ```
 
-This is intentionally separate from the JSON-only workflow. Cap's project config has an `audio.improve` flag, but not a full speech denoise pipeline. `audio:sanitize` makes a copied `.cap` by default and re-encodes microphone audio with ffmpeg filters tuned for spoken voice. Use `--include-system-audio` only if you also want app/system audio processed.
+This is intentionally separate from the JSON-only workflow. Cap's project config has an `audio.improve` flag, but not a full speech denoise pipeline. `audio:sanitize` makes a copied `.cap` by default and re-encodes microphone audio with speech-focused tooling. The default `voice` / `strong` / `broadcast` presets now use the native DeepFilterNet binary and auto-cache it under `~/.cache/agentic-cap-editor/deep-filter/`. `--engine ffmpeg` remains available as a fallback and uses ffmpeg's `arnndn` RNNoise path, with models cached under `~/.cache/agentic-cap-editor/arnndn/std.rnnn`. Use `--include-system-audio` only if you also want app/system audio processed.
 
 ### Bake (optional, destructive-to-copy)
 
