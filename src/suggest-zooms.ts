@@ -143,10 +143,10 @@ for (const cl of clusters) {
 		start,
 		end,
 		amount,
-		mode:
-			mode === "manual"
-				? { Manual: { x: Number(cl.avgX.toFixed(4)), y: Number(cl.avgY.toFixed(4)) } }
-				: "Auto",
+			mode:
+				mode === "manual"
+					? { manual: { x: Number(cl.avgX.toFixed(4)), y: Number(cl.avgY.toFixed(4)) } }
+					: "auto",
 	};
 	if (proposed.length > 0) {
 		const prev = proposed[proposed.length - 1]!;
@@ -167,9 +167,9 @@ if (values.json) {
 	console.log(`proposed zooms (${proposed.length}):`);
 	for (const z of proposed) {
 		const m =
-			z.mode === "Auto"
+			z.mode === "auto"
 				? "Auto"
-				: `Manual(${z.mode.Manual.x.toFixed(3)}, ${z.mode.Manual.y.toFixed(3)})`;
+				: `Manual(${z.mode.manual.x.toFixed(3)}, ${z.mode.manual.y.toFixed(3)})`;
 		console.log(`  [${z.start.toFixed(3)}, ${z.end.toFixed(3)}] x${z.amount} ${m}`);
 	}
 	console.log("");

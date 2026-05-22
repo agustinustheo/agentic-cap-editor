@@ -41,7 +41,7 @@ const segment: ZoomSegment = {
 	start,
 	end,
 	amount,
-	mode: x !== undefined && y !== undefined ? { Manual: { x, y } } : "Auto",
+	mode: x !== undefined && y !== undefined ? { manual: { x, y } } : "auto",
 };
 
 const glideDir = values["glide-direction"];
@@ -80,6 +80,6 @@ if (values["dry-run"]) {
 } else {
 	await saveBundle(bundle, { backup: !values["no-backup"] });
 	console.log(
-		`added zoom [${segment.start}, ${segment.end}] x${segment.amount} (${segment.mode === "Auto" ? "Auto" : "Manual"}) to ${capPath}`,
+		`added zoom [${segment.start}, ${segment.end}] x${segment.amount} (${segment.mode === "auto" ? "Auto" : "Manual"}) to ${capPath}`,
 	);
 }

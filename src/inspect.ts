@@ -1,4 +1,8 @@
-import { loadBundle, primaryVideoPath, ffprobeDuration } from "./lib/cap.ts";
+import { loadBundle, primaryVideoPath } from "./lib/cap.ts";
+import {
+	rawRecordingDurationLikeCap,
+	recordingDurationsLikeCap,
+} from "./lib/durations.ts";
 import { timelineDuration } from "./lib/timeline.ts";
 import { parseArgs, requirePositional } from "./lib/cli.ts";
 
@@ -11,8 +15,10 @@ const bundle = await loadBundle(capPath);
 const timeline = bundle.config.timeline ?? null;
 
 let sourceDuration: number | null = null;
+let recordingDurations: Awaited<ReturnType<typeof recordingDurationsLikeCap>> = [];
 try {
-	sourceDuration = await ffprobeDuration(primaryVideoPath(bundle));
+	recordingDurations = await recordingDurationsLikeCap(bundle);
+	sourceDuration = rawRecordingDurationLikeCap(recordingDurations);
 } catch {
 	sourceDuration = null;
 }
@@ -25,6 +31,7 @@ const summary = {
 	platform: bundle.meta.platform,
 	primaryVideo: primaryVideoPath(bundle),
 	sourceDurationSec: sourceDuration,
+	recordingDurations,
 	timelineDurationSec: outputDuration,
 	timelineInitialized: timeline !== null,
 	segments: timeline?.segments ?? [],
@@ -39,10 +46,10 @@ if (values.json) {
 	console.log(`platform:       ${summary.platform ?? "?"}`);
 	console.log(`primary video:  ${summary.primaryVideo}`);
 	console.log(
-		`source dur:     ${sourceDuration !== null ? `${sourceDuration.toFixed(3)}s` : "(ffprobe failed)"}`,
+		`raw media dur:  ${sourceDuration !== null ? `${sourceDuration.toFixed(3)}s` : "(ffprobe failed)"} (Cap editor recordingDuration)`,
 	);
 	console.log(
-		`timeline dur:   ${outputDuration !== null ? `${outputDuration.toFixed(3)}s` : "(no timeline yet — entire source plays)"}`,
+		`export dur:     ${outputDuration !== null ? `${outputDuration.toFixed(3)}s` : "(no timeline yet — entire source plays)"}`,
 	);
 	console.log("");
 	console.log(`segments (${summary.segments.length}):`);
@@ -56,9 +63,9 @@ if (values.json) {
 	console.log(`zoom segments (${summary.zoomSegments.length}):`);
 	for (const [i, z] of summary.zoomSegments.entries()) {
 		const mode =
-			z.mode === "Auto"
+			z.mode === "auto"
 				? "Auto"
-				: `Manual(${z.mode.Manual.x.toFixed(2)}, ${z.mode.Manual.y.toFixed(2)})`;
+				: `Manual(${z.mode.manual.x.toFixed(2)}, ${z.mode.manual.y.toFixed(2)})`;
 		console.log(
 			`  [${i}] [${z.start.toFixed(3)}, ${z.end.toFixed(3)}] x${z.amount} ${mode}`,
 		);

@@ -1,7 +1,12 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import { loadBundle, ffprobeDuration } from "./lib/cap.ts";
+import { loadBundle } from "./lib/cap.ts";
 import { recordingSegmentPaths } from "./lib/cursor.ts";
+import {
+	rawRecordingDurationLikeCap,
+	recordingDurationLikeCap,
+	type RecordingSegmentDuration,
+} from "./lib/durations.ts";
 import { timelineDuration } from "./lib/timeline.ts";
 import { parseArgs, requirePositional } from "./lib/cli.ts";
 import { isCapAppRunning } from "./lib/cap-app.ts";
@@ -32,10 +37,13 @@ function warning(code: string, message: string): void {
 
 const bundle = await loadBundle(capPath);
 const recordings = recordingSegmentPaths(bundle);
+const durationDetails: RecordingSegmentDuration[] = [];
 const durations: number[] = [];
 for (const rec of recordings) {
 	try {
-		durations.push(await ffprobeDuration(rec.displayPath));
+		const detail = await recordingDurationLikeCap(rec);
+		durationDetails.push(detail);
+		durations.push(detail.duration);
 	} catch (err) {
 		durations.push(Number.NaN);
 		error(
@@ -49,7 +57,7 @@ const timeline = bundle.config.timeline;
 const segments = timeline?.segments ?? [];
 const zooms = timeline?.zoomSegments ?? [];
 const captions = timeline?.captionSegments ?? [];
-const fullDuration = durations.reduce((sum, d) => sum + (Number.isFinite(d) ? d : 0), 0);
+const fullDuration = rawRecordingDurationLikeCap(durationDetails);
 const outputDuration = timelineDuration(segments);
 
 if (!timeline) {
@@ -84,6 +92,21 @@ for (let i = 0; i < zooms.length; i++) {
 	const zoom = zooms[i]!;
 	if (!Number.isFinite(zoom.start) || !Number.isFinite(zoom.end) || zoom.end <= zoom.start) {
 		error("zoom-range", `zoom ${i} has invalid range ${zoom.start} -> ${zoom.end}.`);
+	}
+	if (
+		zoom.mode !== "auto" &&
+		!(
+			zoom.mode &&
+			typeof zoom.mode === "object" &&
+			"manual" in zoom.mode &&
+			Number.isFinite(zoom.mode.manual.x) &&
+			Number.isFinite(zoom.mode.manual.y)
+		)
+	) {
+		error(
+			"zoom-mode",
+			`zoom ${i} has invalid mode ${JSON.stringify(zoom.mode)}. Cap expects "auto" or {"manual":{"x":number,"y":number}}.`,
+		);
 	}
 	if (zoom.start < 0 || zoom.end > outputDuration + 1e-6) {
 		error(
@@ -146,10 +169,19 @@ if (unusedRecordings.length > 0) {
 if (values["expect-edited"]) {
 	const hasSpeedRamp = segments.some((s) => Math.abs(s.timescale - 1) > 1e-6);
 	const isTrimmed = fullDuration > 0 && outputDuration < fullDuration - 1;
-	if (!isTrimmed && zooms.length === 0 && captions.length === 0 && !hasSpeedRamp) {
+	const hasMotionOrTimelineEdit = isTrimmed || zooms.length > 0 || hasSpeedRamp;
+	if (!hasMotionOrTimelineEdit) {
 		error(
 			"unedited",
-			"expected an edited project, but timeline duration matches source and there are no zooms, captions, or speed changes.",
+			"expected an edited project, but timeline duration matches source and there are no zooms or speed/timeline changes. Captions alone are not enough for an edited video.",
+		);
+	}
+	const rawDurationGap = Math.abs(fullDuration - outputDuration);
+	const rawDurationGapIsVisiblyDifferent = rawDurationGap > Math.max(5, outputDuration * 0.02);
+	if (isTrimmed && rawDurationGapIsVisiblyDifferent) {
+		warning(
+			"cap-editor-raw-duration",
+			`Cap.app's editorInstance.recordingDuration is still raw media length ${fullDuration.toFixed(3)}s; export/playback timeline duration is ${outputDuration.toFixed(3)}s. If the Cap UI itself must not look raw-length, run pnpm bake:timeline to create a baked .cap copy.`,
 		);
 	}
 }
@@ -182,11 +214,12 @@ if (await isCapAppRunning()) {
 const summary = {
 	path: capPath,
 	recordings: recordings.length,
-	sourceDurationSec: Number(fullDuration.toFixed(3)),
+	rawMediaDurationSec: Number(fullDuration.toFixed(3)),
 	outputDurationSec: Number(outputDuration.toFixed(3)),
 	timelineSegments: segments.length,
 	zoomSegments: zooms.length,
 	captionSegments: captions.length,
+	recordingDurations: durationDetails,
 	unusedRecordings,
 	findings,
 	ok:
@@ -199,7 +232,7 @@ if (values.json) {
 } else {
 	console.log(`# ${capPath}`);
 	console.log(`recordings:      ${summary.recordings}`);
-	console.log(`source duration: ${summary.sourceDurationSec.toFixed(3)}s`);
+	console.log(`raw media dur:   ${summary.rawMediaDurationSec.toFixed(3)}s`);
 	console.log(`output duration: ${summary.outputDurationSec.toFixed(3)}s`);
 	console.log(`timeline:        ${summary.timelineSegments} segment(s)`);
 	console.log(`zooms:           ${summary.zoomSegments}`);

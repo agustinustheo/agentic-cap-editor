@@ -15,6 +15,8 @@ export interface CursorClickEvent {
 	cursor_num: number;
 	cursor_id: string;
 	time_ms: number;
+	x?: number;
+	y?: number;
 	down: boolean;
 }
 

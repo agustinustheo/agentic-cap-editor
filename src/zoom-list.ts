@@ -17,9 +17,9 @@ if (values.json) {
 	}
 	for (const [i, z] of zooms.entries()) {
 		const mode =
-			z.mode === "Auto"
+			z.mode === "auto"
 				? "Auto"
-				: `Manual(${z.mode.Manual.x}, ${z.mode.Manual.y})`;
+				: `Manual(${z.mode.manual.x}, ${z.mode.manual.y})`;
 		const extras: string[] = [];
 		if (z.glideDirection && z.glideDirection !== "none") extras.push(`glide=${z.glideDirection}`);
 		if (z.instantAnimation) extras.push("instant");

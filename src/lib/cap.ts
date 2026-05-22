@@ -3,7 +3,7 @@ import { join, basename } from "node:path";
 import { spawn } from "node:child_process";
 import { isCapAppRunning } from "./cap-app.ts";
 
-export type ZoomMode = "Auto" | { Manual: { x: number; y: number } };
+export type ZoomMode = "auto" | { manual: { x: number; y: number } };
 
 export type GlideDirection = "none" | "left" | "right" | "up" | "down";
 
