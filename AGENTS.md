@@ -61,6 +61,12 @@ pnpm analyze:cursor path/to/Recording.cap
 # List every click-down event with cursor position at that moment.
 pnpm analyze:clicks path/to/Recording.cap --json
 
+# Debug awkward clip joins by exporting before/after preview videos, frame sheets,
+# boundary audio, waveforms, and cursor jumps. Clip numbers are 1-based for human review.
+pnpm analyze:transitions path/to/Recording.cap --from-clip 4 --to-clip 10
+pnpm analyze:transitions path/to/Recording.cap --from-clip 4 --to-clip 10 --out /tmp/transition-check
+pnpm analyze:transitions path/to/Recording.cap --json
+
 # Transcribe with whisper.cpp (cached under <cap>/.transcripts/).
 pnpm analyze:transcript path/to/Recording.cap
 pnpm analyze:transcript path/to/Recording.cap --refresh --json
@@ -232,6 +238,7 @@ If any individual proposal looks wrong, sample a keyframe with `pnpm frame <cap>
 Cap can record multiple clips and stitch them into one project (`MultipleSegments` in `recording-meta.json`). The toolkit supports these:
 
 - `analyze:silences`, `analyze:cursor`, `analyze:clicks`, `analyze:transcript` run per recording segment and report per-segment results.
+- `analyze:transitions` is for editorial QA, not mutation. Use it when transcript-contiguous cuts still feel wrong: play the generated boundary previews, inspect frame sheets for visual jumps, play the boundary audio by ear, compare waveforms, and check cursor jumps before changing keep ranges or zooms.
 - `suggest:cuts` and `captions:add` initialize the timeline (when empty) with one `TimelineSegment` per recording in order, then map silences/transcript from recording-time into the concatenated output time before applying. So the first recipe step above works as-is for multi-segment.
 - `captions:add` writes captions against the current timeline. If a recording segment has been intentionally omitted from the timeline, its transcript is dropped instead of leaking into output time zero.
 - `validate --expect-edited` is mandatory before final handoff. It catches exactly the failure modes agents miss: Cap.app overwriting the project back to raw duration, zoom/caption ranges past the end, omitted recording segments, and helper files accidentally left in `recordings/edited/`.

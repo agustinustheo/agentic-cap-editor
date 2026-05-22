@@ -14,7 +14,7 @@ Editing a screen recording into a "snappy" product video is mostly mechanical: c
 
 Instead of dragging clips around in a GUI, you point this toolkit at a `.cap` bundle and:
 
-1. **Read** — `inspect`, `analyze:silences`, `analyze:clicks`, `analyze:transcript`, `frame`
+1. **Read** — `inspect`, `analyze:silences`, `analyze:clicks`, `analyze:transitions`, `analyze:transcript`, `frame`
 2. **Plan** — `suggest:cuts`, `suggest:zooms` (dry-run by default)
 3. **Apply** — `--apply` flips them to write edits into `project-config.json`
 4. **Render** — open in Cap.app, or use the headless `pnpm render --cli` path
@@ -51,6 +51,7 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm analyze:silences <cap>` | ffmpeg silencedetect → cuttable ranges |
 | `pnpm analyze:cursor <cap>` | Cursor move/click counts per recording segment |
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
+| `pnpm analyze:transitions <cap>` | Export boundary preview videos, frame sheets, audio, waveforms, and cursor jumps for clip joins |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
 | `pnpm audio:sanitize <cap>` | Create a voice-cleaned `.cap` copy by re-encoding mic audio with ffmpeg |
 | `pnpm audio:extract-speaker <cap>` | Create a speaker-isolated `.cap` copy using ClearVoice speech separation |
@@ -182,6 +183,29 @@ An agent doesn't watch the video frame-by-frame. It uses four data streams extra
 - **ffmpeg + ffprobe** in PATH — `brew install ffmpeg`
 - **whisper-cpp** for transcripts — `brew install whisper-cpp`, plus a GGML model at `~/.cache/whisper/ggml-base.en.bin` (`base.en` is the speed/quality sweet spot; `small.en` or `medium.en` for higher accuracy). Override with `WHISPER_MODEL` env var or `--model` arg.
 - **Rust toolchain** — only required if you want headless `pnpm render --cli`. Cap.app on macOS handles export with no extra setup.
+
+## Credits and references
+
+This repository builds on external speech-processing research and open-source tooling. If you reuse the same workflow, please credit the upstream projects directly.
+
+- **DeepFilterNet** (`audio:sanitize`)
+  - Upstream project: [Rikorose/DeepFilterNet](https://github.com/Rikorose/DeepFilterNet)
+  - In this repo, the native `deep-filter` binary is pinned to **v0.5.6** in `src/audio-sanitize.ts`.
+  - The DeepFilterNet README includes a **Citation Guide**. For the CLI we use here, their README says the default model is **DeepFilterNet2**, so the safest academic reference is the framework citation plus the DeepFilterNet2 paper from their guide.
+
+- **ClearVoice / ClearerVoice-Studio** (`audio:extract-speaker`)
+  - Upstream project: [modelscope/ClearerVoice-Studio](https://github.com/modelscope/ClearerVoice-Studio)
+  - In this repo, speaker extraction uses the Python package entrypoint `uvx --from clearvoice` plus the **`MossFormer2_SS_16K`** speech-separation model.
+  - Important version note: the repo currently does **not** pin a ClearVoice package version in code. The implementation follows the GitHub README and PyPI package name, but runtime resolution is still floating unless we later add an explicit version pin.
+  - The ClearerVoice-Studio GitHub README links the project paper: *ClearerVoice-Studio: Bridging Advanced Speech Processing Research and Practical Deployment*.
+
+- **Other audio infrastructure**
+  - `ffmpeg` / `ffprobe` drive the local audio/video processing pipeline.
+  - `arnndn` (RNNoise model path) is used as the fallback denoise path for ffmpeg-based sanitize presets.
+
+If you need a concise acknowledgment section, something like the following is appropriate:
+
+> Audio denoise and speaker-isolation workflows in this project build on DeepFilterNet and ClearerVoice-Studio / ClearVoice, plus ffmpeg-based processing utilities.
 
 ## Limits / known caveats
 
