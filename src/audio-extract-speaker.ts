@@ -3,11 +3,13 @@ import {
 	copyFile,
 	cp,
 	mkdir,
+	mkdtemp,
 	readFile,
 	rm,
 	writeFile,
 } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { loadBundle } from "./lib/cap.ts";
 import { closeCapApp } from "./lib/cap-app.ts";
@@ -20,6 +22,7 @@ const { positionals, values } = parseArgs({
 	force: { type: "boolean", default: false },
 	model: { type: "string", default: "MossFormer2_SS_16K" },
 	"keep-stem": { type: "string", default: "auto" },
+	"pre-denoise": { type: "string", default: "none" },
 	"include-system-audio": { type: "boolean", default: false },
 	"dry-run": { type: "boolean", default: false },
 });
@@ -36,6 +39,14 @@ const defaultModelWeights = resolve(
 	"checkpoints",
 	defaultModelName,
 	"last_best_checkpoint.pt",
+);
+const defaultDeepFilterPath = join(
+	homedir(),
+	".cache",
+	"agentic-cap-editor",
+	"deep-filter",
+	"0.5.6",
+	"deep-filter",
 );
 
 type AudioKind = "mic" | "system";
@@ -168,6 +179,117 @@ async function reencodeAudio(
 	]);
 }
 
+function preDenoiseFilter(mode: string): string | null {
+	switch (mode) {
+		case "none":
+			return null;
+		case "light":
+			return "highpass=f=70,lowpass=f=7600,afftdn=nf=-20:nt=w,loudnorm=I=-18:LRA=8:TP=-2";
+		case "voice":
+			return "highpass=f=80,lowpass=f=7200,arnndn=model='/Users/theo/.cache/agentic-cap-editor/arnndn/std.rnnn':mix=0.85,loudnorm=I=-17:LRA=7:TP=-2";
+		default:
+			throw new Error(
+				`invalid --pre-denoise "${mode}" (expected none, light, voice, deepfilter, or plus)`,
+			);
+	}
+}
+
+async function runDeepFilterPreDenoise(
+	inputPath: string,
+	outputPath: string,
+	options?: {
+		attenLimDb?: number;
+		postFilter?: boolean;
+		postFilterBeta?: number;
+		postEncodeFilter?: string;
+	},
+): Promise<void> {
+	if (!(await pathExists(defaultDeepFilterPath))) {
+		throw new Error(
+			`deep-filter binary missing at ${defaultDeepFilterPath}. Run audio:sanitize once first or restore the cached binary.`,
+		);
+	}
+	const tempDir = await mkdtemp(join(tmpdir(), "agentic-cap-editor-predf-"));
+	try {
+		const args = [
+			"-o",
+			tempDir,
+			"-a",
+			String(options?.attenLimDb ?? 20),
+		];
+		if (options?.postFilter) {
+			args.push("--pf");
+			if (typeof options.postFilterBeta === "number") {
+				args.push("--pf-beta", String(options.postFilterBeta));
+			}
+		}
+		args.push(inputPath);
+		await runCommand(defaultDeepFilterPath, args);
+		const producedPath = join(tempDir, basename(inputPath));
+		await runCommand("ffmpeg", [
+			"-hide_banner",
+			"-loglevel",
+			"error",
+			"-y",
+			"-i",
+			producedPath,
+			"-vn",
+			"-af",
+			options?.postEncodeFilter ??
+				"highpass=f=70,lowpass=f=9000,loudnorm=I=-17:LRA=7:TP=-2",
+			"-ar",
+			"16000",
+			"-ac",
+			"1",
+			outputPath,
+		]);
+	} finally {
+		await rm(tempDir, { recursive: true, force: true });
+	}
+}
+
+async function maybePreDenoise(
+	inputPath: string,
+	mode: string,
+): Promise<string> {
+	if (mode === "deepfilter") {
+		const outputPath = `${inputPath}.predenoise.wav`;
+		await runDeepFilterPreDenoise(inputPath, outputPath);
+		return outputPath;
+	}
+	if (mode === "plus") {
+		const outputPath = `${inputPath}.predenoise.wav`;
+		await runDeepFilterPreDenoise(inputPath, outputPath, {
+			attenLimDb: 44,
+			postFilter: true,
+			postFilterBeta: 0.055,
+			postEncodeFilter:
+				"highpass=f=80,lowpass=f=8500,agate=threshold=0.008:ratio=1.4:attack=5:release=180:range=0.35:makeup=1,speechnorm=e=6:r=0.00012:l=1,loudnorm=I=-16:LRA=5:TP=-1.5",
+		});
+		return outputPath;
+	}
+	const filter = preDenoiseFilter(mode);
+	if (!filter) return inputPath;
+	const outputPath = `${inputPath}.predenoise.wav`;
+	await runCommand("ffmpeg", [
+		"-hide_banner",
+		"-loglevel",
+		"error",
+		"-y",
+		"-i",
+		inputPath,
+		"-vn",
+		"-af",
+		filter,
+		"-ar",
+		"16000",
+		"-ac",
+		"1",
+		outputPath,
+	]);
+	return outputPath;
+}
+
 const outPath =
 	values["in-place"] === true
 		? capPath
@@ -181,6 +303,13 @@ if (values["in-place"] && typeof values.out === "string") {
 const keepStem = String(values["keep-stem"] ?? "auto");
 if (!["auto", "1", "2"].includes(keepStem)) {
 	console.error(`error: invalid --keep-stem "${keepStem}" (expected auto, 1, or 2)`);
+	process.exit(2);
+}
+const preDenoise = String(values["pre-denoise"] ?? "none");
+if (!["none", "light", "voice", "deepfilter", "plus"].includes(preDenoise)) {
+	console.error(
+		`error: invalid --pre-denoise "${preDenoise}" (expected none, light, voice, deepfilter, or plus)`,
+	);
 	process.exit(2);
 }
 
@@ -217,6 +346,7 @@ if (values["dry-run"]) {
 				command: "audio:extract-speaker",
 				model: values.model ?? "MossFormer2_SS_16K",
 				keepStem,
+				preDenoise,
 				files: [...previewTargets.entries()].map(([path, kind]) => ({ path, kind })),
 			},
 			null,
@@ -247,6 +377,7 @@ const extractionMeta: Record<string, unknown> = {};
 
 for (const [audioPath, kind] of targets) {
 	const workWav = `${audioPath}.speaker-input.wav`;
+	const preDenoisedWav = `${audioPath}.speaker-input.predenoise.wav`;
 	const extractedWav = `${audioPath}.speaker-output.wav`;
 	const extractedMeta = `${audioPath}.speaker-output.json`;
 	const tempPath = `${audioPath}.speaker${extname(audioPath)}`;
@@ -269,8 +400,9 @@ for (const [audioPath, kind] of targets) {
 		"1",
 		workWav,
 	]);
+	const extractionInputPath = await maybePreDenoise(workWav, preDenoise);
 	await runSpeakerExtraction(
-		workWav,
+		extractionInputPath,
 		extractedWav,
 		extractedMeta,
 		String(values.model ?? "MossFormer2_SS_16K"),
@@ -284,9 +416,11 @@ for (const [audioPath, kind] of targets) {
 	);
 	extractionMeta[audioPath] = {
 		kind,
+		preDenoise,
 		...meta,
 	};
 	await rm(workWav, { force: true });
+	await rm(preDenoisedWav, { force: true });
 	await rm(extractedWav, { force: true });
 	await rm(extractedMeta, { force: true });
 	await rm(tempPath, { force: true });
@@ -301,6 +435,7 @@ await writeFile(
 			command: "audio:extract-speaker",
 			model: values.model ?? "MossFormer2_SS_16K",
 			keepStem,
+			preDenoise,
 			inPlace: values["in-place"] === true,
 			includeSystemAudio: values["include-system-audio"] === true,
 			fileCount: targets.size,
@@ -315,6 +450,7 @@ console.log("");
 console.log(`speaker extracted audio: ${outPath}`);
 console.log(`model: ${values.model ?? "MossFormer2_SS_16K"}`);
 console.log(`keep-stem: ${keepStem}`);
+console.log(`pre-denoise: ${preDenoise}`);
 console.log(`tracks: ${targets.size}`);
 if (outPath === capPath) {
 	console.log("mode: in-place (per-file .bak backups created)");
