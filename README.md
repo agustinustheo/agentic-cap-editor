@@ -52,6 +52,8 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm analyze:cursor <cap>` | Cursor move/click counts per recording segment |
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
 | `pnpm analyze:transitions <cap>` | Export boundary preview videos, frame sheets, audio, waveforms, and cursor jumps for clip joins |
+| `pnpm analyze:zooms <cap>` | Export zoom QA frames/crops and flag edge targets, cursor travel, and drifting auto zooms |
+| `pnpm analyze:phrases <cap>` | Detect filler/repetition candidates like "like", "right", repeated phrases, and hedged closings |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
 | `pnpm audio:sanitize <cap>` | Create a voice-cleaned `.cap` copy by re-encoding mic audio with ffmpeg |
 | `pnpm audio:extract-speaker <cap>` | Create a speaker-isolated `.cap` copy using ClearVoice speech separation |

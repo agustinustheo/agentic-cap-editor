@@ -67,6 +67,15 @@ pnpm analyze:transitions path/to/Recording.cap --from-clip 4 --to-clip 10
 pnpm analyze:transitions path/to/Recording.cap --from-clip 4 --to-clip 10 --out /tmp/transition-check
 pnpm analyze:transitions path/to/Recording.cap --json
 
+# Debug zoom quality by exporting full-frame and simulated-crop review images.
+# Use this before replacing auto zooms with manual targets.
+pnpm analyze:zooms path/to/Recording.cap
+pnpm analyze:zooms path/to/Recording.cap --out /tmp/zoom-check
+
+# Find likely filler/repetition cut candidates mapped to output time.
+pnpm analyze:phrases path/to/Recording.cap
+pnpm analyze:phrases path/to/Recording.cap --max-segment-len 10 --json
+
 # Transcribe with whisper.cpp (cached under <cap>/.transcripts/).
 pnpm analyze:transcript path/to/Recording.cap
 pnpm analyze:transcript path/to/Recording.cap --refresh --json
