@@ -20,6 +20,8 @@
 		"analyze:cursor": "tsx src/analyze-cursor.ts",
 		"analyze:clicks": "tsx src/analyze-clicks.ts",
 		"analyze:transitions": "tsx src/analyze-transitions.ts",
+		"analyze:zooms": "tsx src/analyze-zooms.ts",
+		"analyze:phrases": "tsx src/analyze-phrases.ts",
 		"analyze:transcript": "tsx src/analyze-transcript.ts",
 		"audio:sanitize": "tsx src/audio-sanitize.ts",
 		"audio:extract-speaker": "tsx src/audio-extract-speaker.ts",
