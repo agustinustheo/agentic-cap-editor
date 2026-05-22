@@ -71,6 +71,9 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm zoom:add <cap>` | Add a single zoom (`--start --end --amount [--x --y]`) |
 | `pnpm zoom:list <cap>` | List current zooms |
 | `pnpm zoom:remove <cap> <idx>` | Remove a zoom by index |
+| `pnpm scene:add <cap>` | Add a scene segment (`--start --end --mode hideCamera|cameraOnly|default`) |
+| `pnpm scene:list <cap>` | List current scene segments |
+| `pnpm scene:remove <cap> <idx>` | Remove a scene segment by index |
 | `pnpm cut <cap>` | Cut a single range from the timeline |
 | `pnpm captions:add <cap>` | Write transcript as Cap captions |
 | `pnpm merge <name> <cap1> [<cap2> ...]` | Merge N source bundles into one (with optional `--include` filters per source) |
@@ -146,6 +149,7 @@ The two most-edited arrays:
 
 - `timeline.segments[]` — playback ranges (`{ recordingSegment, timescale, start, end }`). Cuts are expressed as splits/removals.
 - `timeline.zoomSegments[]` — mouse close-ups (`{ start, end, amount, mode: "auto" | { manual: { x, y } } }`). Cap's generated TypeScript type is lowercase; uppercase `"Auto"` / `{ "Manual": ... }` will be ignored or normalized away by the editor.
+- `timeline.sceneSegments[]` — scene-mode overrides (`{ start, end, mode }`) for temporary view changes like hiding the camera while a prompt is being typed. Valid modes are `"default"`, `"cameraOnly"`, and `"hideCamera"`.
 
 ## End-to-end "make it snappy" recipe
 

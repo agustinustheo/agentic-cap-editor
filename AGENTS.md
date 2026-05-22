@@ -31,7 +31,7 @@ Edits in `project-config.json` are arrays of typed segments. The two most import
 - `timeline.segments[]` — playback ranges (`TimelineSegment { recordingSegment, timescale, start, end }`). Cuts are expressed as splits/removals of these.
 - `timeline.zoomSegments[]` — mouse close-ups (`ZoomSegment { start, end, amount, mode, ... }`).
 
-Other arrays present in the schema but not yet wrapped by this toolkit: `sceneSegments`, `maskSegments`, `textSegments`, `captionSegments`, `keyboardSegments`, `annotations`.
+Other arrays present in the schema that matter for editing: `sceneSegments`, `maskSegments`, `textSegments`, `captionSegments`, `keyboardSegments`, `annotations`. `sceneSegments` are now wrapped by the toolkit; the rest are still pass-through unless you add a new command.
 
 ## Commands
 
@@ -78,6 +78,8 @@ pnpm audio:sanitize path/to/Recording.cap --include-system-audio
 
 # Extract the dominant speaker into a copied bundle using ClearVoice speech separation.
 pnpm audio:extract-speaker path/to/Recording.cap
+pnpm audio:extract-speaker path/to/Recording.cap --pre-denoise light
+pnpm audio:extract-speaker path/to/Recording.cap --pre-denoise plus
 pnpm audio:extract-speaker path/to/Recording.cap --keep-stem 1
 pnpm audio:extract-speaker path/to/Recording.cap --keep-stem 2
 pnpm audio:extract-speaker path/to/Recording.cap --in-place
@@ -137,12 +139,14 @@ pnpm audio:sanitize recordings/edited/Demo.cap --post-filter --atten-lim-db 28
 pnpm audio:sanitize recordings/edited/Demo.cap --engine ffmpeg --preset voice
 pnpm audio:sanitize recordings/edited/Demo.cap --in-place
 pnpm audio:extract-speaker recordings/edited/Demo.cap
+pnpm audio:extract-speaker recordings/edited/Demo.cap --pre-denoise light
+pnpm audio:extract-speaker recordings/edited/Demo.cap --pre-denoise plus
 pnpm audio:extract-speaker recordings/edited/Demo.cap --keep-stem 1
 ```
 
 This is intentionally separate from the JSON-only workflow. Cap's project config has an `audio.improve` flag, but not a full speech denoise pipeline. `audio:sanitize` makes a copied `.cap` by default and re-encodes microphone audio with speech-focused tooling. The default `voice` / `strong` / `broadcast` presets now use the native DeepFilterNet binary and auto-cache it under `~/.cache/agentic-cap-editor/deep-filter/`. `--engine ffmpeg` remains available as a fallback and uses ffmpeg's `arnndn` RNNoise path, with models cached under `~/.cache/agentic-cap-editor/arnndn/std.rnnn`. Use `--include-system-audio` only if you also want app/system audio processed.
 
-`audio:extract-speaker` is a separate workflow. It uses the Apache-2.0 ClearVoice package via `uvx --from clearvoice` and runs `speech_separation` with `MossFormer2_SS_16K`, then keeps the most voice-like stem by default. This is not the same as denoise: it is an isolation pass intended for "keep the main speaker, drop the rest" when background sounds still leak during active speech.
+`audio:extract-speaker` is a separate workflow. It uses the Apache-2.0 ClearVoice package via `uvx --from clearvoice` and runs `speech_separation` with `MossFormer2_SS_16K`, then keeps the most voice-like stem by default. This is not the same as denoise: it is an isolation pass intended for "keep the main speaker, drop the rest" when background sounds still leak during active speech. If separation starts clipping short words or consonants, try `--pre-denoise light` before extraction so the separator sees a slightly cleaner input. `--pre-denoise plus` runs an inline DeepFilter-style cleanup first using the same stronger profile as the earlier "Plus" pass, but without creating an intermediate `.cap`.
 
 ### Bake (optional, destructive-to-copy)
 
@@ -165,6 +169,11 @@ pnpm zoom:add path/to/Recording.cap --start 5.0 --end 8.0 --amount 1.5 --dry-run
 
 pnpm zoom:list path/to/Recording.cap
 pnpm zoom:remove path/to/Recording.cap 2
+
+pnpm scene:add path/to/Recording.cap --start 12.0 --end 18.0 --mode hideCamera
+pnpm scene:add path/to/Recording.cap --start 42.0 --end 46.0 --mode cameraOnly
+pnpm scene:list path/to/Recording.cap
+pnpm scene:remove path/to/Recording.cap 0
 
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0 --dry-run
@@ -229,7 +238,7 @@ Cap can record multiple clips and stitch them into one project (`MultipleSegment
 
 ## Critical: close Cap.app before mutating
 
-Cap.app appears to auto-save its in-memory project state when the bundle is open. If you run any mutating script (`suggest:cuts --apply`, `suggest:zooms --apply`, `captions:add`, `zoom:add`, `zoom:remove`, `cut`, `trim`, `merge`) while Cap.app has the same bundle open, **Cap.app may overwrite your edits with its stale state when the user scrubs the timeline or clicks anything**. Always `Cmd+Q` Cap.app first, run the scripts, then `open <cap>` to preview.
+Cap.app appears to auto-save its in-memory project state when the bundle is open. If you run any mutating script (`suggest:cuts --apply`, `suggest:zooms --apply`, `captions:add`, `zoom:add`, `zoom:remove`, `scene:add`, `scene:remove`, `cut`, `trim`, `merge`) while Cap.app has the same bundle open, **Cap.app may overwrite your edits with its stale state when the user scrubs the timeline or clicks anything**. Always `Cmd+Q` Cap.app first, run the scripts, then `open <cap>` to preview.
 
 ## External deps
 
@@ -255,10 +264,11 @@ Cap.app appears to auto-save its in-memory project state when the bundle is open
    - CLI auto mode (no `--x/--y`) asks Cap to target the cursor. Manual mode uses normalized 0..1 coords.
 5. **Don't overlap zoom segments.** `zoom:add` refuses overlaps; remove the existing segment first if intentional.
 6. **Cuts are non-destructive splits.** A cut on a single-segment timeline becomes two segments around the gap. Re-cutting the same range is a no-op (idempotent for fully-covered ranges).
-7. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.
-8. **Don't touch `recording-meta.json` or `content/`.** Those are recording artifacts. Only `project-config.json` is editable.
-9. **Always `pnpm validate --expect-edited` before final.** If validation warns about omitted segments or Cap.app running, say so explicitly or fix it.
-10. **No helper files in `recordings/edited/`.** Use `/tmp/*.json` for keep ranges and screenshots. The user expects only `.cap` bundles at the top level.
+7. **Scene mode uses Cap enum strings.** Scene JSON must use `"default"`, `"cameraOnly"`, or `"hideCamera"`. Use `hideCamera` when prompt entry or dense screen content needs the facecam out of the way temporarily.
+8. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.
+9. **Don't touch `recording-meta.json` or `content/`.** Those are recording artifacts. Only `project-config.json` is editable unless you are intentionally using the separate audio tooling.
+10. **Always `pnpm validate --expect-edited` before final.** If validation warns about omitted segments or Cap.app running, say so explicitly or fix it.
+11. **No helper files in `recordings/edited/`.** Use `/tmp/*.json` for keep ranges and screenshots. The user expects only `.cap` bundles at the top level.
 
 ## When to extend the toolkit
 
