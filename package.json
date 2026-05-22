@@ -17,6 +17,7 @@
 		"analyze:cursor": "tsx src/analyze-cursor.ts",
 		"analyze:clicks": "tsx src/analyze-clicks.ts",
 		"analyze:transcript": "tsx src/analyze-transcript.ts",
+		"audio:sanitize": "tsx src/audio-sanitize.ts",
 		"frame": "tsx src/frame.ts",
 		"suggest:cuts": "tsx src/suggest-cuts.ts",
 		"suggest:zooms": "tsx src/suggest-zooms.ts",
@@ -25,6 +26,7 @@
 		"trim": "tsx src/trim.ts",
 		"validate": "tsx src/validate.ts",
 		"edit:snappy": "tsx src/edit-snappy.ts",
+		"bake:timeline": "tsx src/bake-timeline.ts",
 		"render": "tsx src/render.ts",
 		"render:build": "cargo build --release --example export-cli -p cap-export --manifest-path .repos/Cap/Cargo.toml",
 		"typecheck": "tsc --noEmit"
