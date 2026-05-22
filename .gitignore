@@ -51,3 +51,6 @@ coverage/
 /*.png
 /frame_at_*.png
 /.transcripts/
+
+# Local audio model checkpoints (fetched by setup script, never committed)
+/checkpoints/

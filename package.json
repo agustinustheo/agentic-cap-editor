@@ -18,6 +18,8 @@
 		"analyze:clicks": "tsx src/analyze-clicks.ts",
 		"analyze:transcript": "tsx src/analyze-transcript.ts",
 		"audio:sanitize": "tsx src/audio-sanitize.ts",
+		"audio:extract-speaker": "tsx src/audio-extract-speaker.ts",
+		"setup:clearvoice-model": "bash scripts/setup-clearvoice-model.sh",
 		"frame": "tsx src/frame.ts",
 		"suggest:cuts": "tsx src/suggest-cuts.ts",
 		"suggest:zooms": "tsx src/suggest-zooms.ts",

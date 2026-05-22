@@ -352,24 +352,35 @@ async function buildFfmpegPlan(preset: string): Promise<AudioPlan> {
 			};
 		}
 		case "strong":
-		case "broadcast": {
+		case "broadcast":
+		case "ultra": {
 			const model = await ensureArnndnModel(
 				values.model,
 				values["model-url"],
 				values["no-model-download"] !== true,
 			);
-			const mix = parseNumberFlag(values.mix, "--mix", { min: 0, max: 1 }) ?? 0.95;
+			const mix =
+				parseNumberFlag(values.mix, "--mix", { min: 0, max: 1 }) ??
+				(preset === "ultra" ? 1 : 0.95);
 			return {
 				engine: "ffmpeg",
-				label: "ffmpeg-broadcast",
+				label: preset === "ultra" ? "ffmpeg-ultra" : "ffmpeg-broadcast",
 				ffmpegFilter: filterString([
-					"highpass=f=85",
-					"lowpass=f=8000",
+					preset === "ultra" ? "highpass=f=100" : "highpass=f=85",
+					preset === "ultra" ? "lowpass=f=7200" : "lowpass=f=8000",
 					`arnndn=model=${escapeFilterValue(model.path)}:mix=${mix.toFixed(2)}`,
-					"agate=threshold=0.012:ratio=1.8:attack=5:release=250:range=0.2:makeup=1",
-					"speechnorm=e=8:r=0.00008:l=1",
-					"loudnorm=I=-16:LRA=6:TP=-1.5",
-				]),
+					preset === "ultra"
+						? "agate=threshold=0.02:ratio=6:attack=2:release=320:range=0.03:makeup=1"
+						: "agate=threshold=0.012:ratio=1.8:attack=5:release=250:range=0.2:makeup=1",
+					preset === "ultra"
+						? "acompressor=threshold=0.09:ratio=3:attack=2:release=120:makeup=1"
+						: "speechnorm=e=8:r=0.00008:l=1",
+					preset === "ultra"
+						? "speechnorm=e=4.5:r=0.00008:l=1"
+						: "loudnorm=I=-16:LRA=6:TP=-1.5",
+					preset === "ultra" ? "loudnorm=I=-16:LRA=4:TP=-1.5" : undefined,
+				].filter((segment): segment is string => Boolean(segment)),
+				),
 				arnndn: {
 					modelPath: model.path,
 					modelDownloaded: model.downloaded,
@@ -380,7 +391,7 @@ async function buildFfmpegPlan(preset: string): Promise<AudioPlan> {
 		}
 		default:
 			throw new Error(
-				`invalid --preset "${preset}" (expected light, voice, neural, strong, or broadcast)`,
+				`invalid --preset "${preset}" (expected light, voice, neural, strong, broadcast, or ultra)`,
 			);
 	}
 }
@@ -399,6 +410,14 @@ async function buildDeepFilterPlan(preset: string): Promise<AudioPlan> {
 		min: 0,
 		max: 1,
 	});
+	const arnndnModel =
+		preset === "ultra"
+			? await ensureArnndnModel(
+					values.model,
+					values["model-url"],
+					values["no-model-download"] !== true,
+				)
+			: null;
 	switch (preset) {
 		case "light":
 		case "voice":
@@ -461,9 +480,37 @@ async function buildDeepFilterPlan(preset: string): Promise<AudioPlan> {
 					postFilterBeta: betaOverride ?? 0.03,
 				},
 			};
+		case "ultra":
+			return {
+				engine: "deepfilter",
+				label: "deepfilter-ultra",
+				postEncodeFilter: filterString([
+					"highpass=f=100",
+					"lowpass=f=7200",
+					`arnndn=model=${escapeFilterValue(arnndnModel!.path)}:mix=1.00`,
+					"agate=threshold=0.02:ratio=6:attack=2:release=320:range=0.03:makeup=1",
+					"acompressor=threshold=0.09:ratio=3:attack=2:release=120:makeup=1",
+					"speechnorm=e=4.5:r=0.00008:l=1",
+					"loudnorm=I=-16:LRA=4:TP=-1.5",
+				]),
+				deepfilter: {
+					binaryPath: binary.path,
+					binaryDownloaded: binary.downloaded,
+					binarySource: binary.source,
+					attenLimDb: attenOverride ?? 85,
+					postFilter: true,
+					postFilterBeta: betaOverride ?? 0.18,
+				},
+				arnndn: {
+					modelPath: arnndnModel!.path,
+					modelDownloaded: arnndnModel!.downloaded,
+					modelSource: arnndnModel!.source,
+					mix: 1,
+				},
+			};
 		default:
 			throw new Error(
-				`invalid --preset "${preset}" (expected light, voice, neural, strong, or broadcast)`,
+				`invalid --preset "${preset}" (expected light, voice, neural, strong, broadcast, or ultra)`,
 			);
 	}
 }
