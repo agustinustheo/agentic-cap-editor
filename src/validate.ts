@@ -56,6 +56,7 @@ for (const rec of recordings) {
 const timeline = bundle.config.timeline;
 const segments = timeline?.segments ?? [];
 const zooms = timeline?.zoomSegments ?? [];
+const scenes = timeline?.sceneSegments ?? [];
 const captions = timeline?.captionSegments ?? [];
 const fullDuration = rawRecordingDurationLikeCap(durationDetails);
 const outputDuration = timelineDuration(segments);
@@ -121,6 +122,29 @@ for (let i = 0; i < zooms.length; i++) {
 		error("zoom-amount", `zoom ${i} has invalid amount ${zoom.amount}.`);
 	} else if (zoom.amount > 2.2) {
 		warning("zoom-aggressive", `zoom ${i} uses x${zoom.amount}; check it is not too disorienting.`);
+	}
+}
+
+const allowedSceneModes = new Set(["default", "cameraOnly", "hideCamera"]);
+for (let i = 0; i < scenes.length; i++) {
+	const scene = scenes[i]!;
+	if (!Number.isFinite(scene.start) || !Number.isFinite(scene.end) || scene.end <= scene.start) {
+		error("scene-range", `scene ${i} has invalid range ${scene.start} -> ${scene.end}.`);
+	}
+	if (scene.start < 0 || scene.end > outputDuration + 1e-6) {
+		error(
+			"scene-bounds",
+			`scene ${i} [${scene.start.toFixed(3)}, ${scene.end.toFixed(3)}] is outside output duration ${outputDuration.toFixed(3)}s.`,
+		);
+	}
+	if (!allowedSceneModes.has(String(scene.mode))) {
+		error(
+			"scene-mode",
+			`scene ${i} has invalid mode ${JSON.stringify(scene.mode)}. Cap expects "default", "cameraOnly", or "hideCamera".`,
+		);
+	}
+	if (i > 0 && scene.start < scenes[i - 1]!.end) {
+		error("scene-overlap", `scene ${i} overlaps scene ${i - 1}.`);
 	}
 }
 
@@ -218,6 +242,7 @@ const summary = {
 	outputDurationSec: Number(outputDuration.toFixed(3)),
 	timelineSegments: segments.length,
 	zoomSegments: zooms.length,
+	sceneSegments: scenes.length,
 	captionSegments: captions.length,
 	recordingDurations: durationDetails,
 	unusedRecordings,

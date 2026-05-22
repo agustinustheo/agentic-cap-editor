@@ -36,6 +36,7 @@ const summary = {
 	timelineInitialized: timeline !== null,
 	segments: timeline?.segments ?? [],
 	zoomSegments: timeline?.zoomSegments ?? [],
+	sceneSegments: timeline?.sceneSegments ?? [],
 };
 
 if (values.json) {
@@ -69,5 +70,10 @@ if (values.json) {
 		console.log(
 			`  [${i}] [${z.start.toFixed(3)}, ${z.end.toFixed(3)}] x${z.amount} ${mode}`,
 		);
+	}
+	console.log("");
+	console.log(`scene segments (${summary.sceneSegments.length}):`);
+	for (const [i, s] of summary.sceneSegments.entries()) {
+		console.log(`  [${i}] [${s.start.toFixed(3)}, ${s.end.toFixed(3)}] ${s.mode}`);
 	}
 }

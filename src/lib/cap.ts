@@ -6,6 +6,7 @@ import { isCapAppRunning } from "./cap-app.ts";
 export type ZoomMode = "auto" | { manual: { x: number; y: number } };
 
 export type GlideDirection = "none" | "left" | "right" | "up" | "down";
+export type SceneMode = "default" | "cameraOnly" | "hideCamera";
 
 export interface ZoomSegment {
 	start: number;
@@ -25,10 +26,16 @@ export interface TimelineSegment {
 	end: number;
 }
 
+export interface SceneSegment {
+	start: number;
+	end: number;
+	mode: SceneMode;
+}
+
 export interface TimelineConfiguration {
 	segments: TimelineSegment[];
 	zoomSegments: ZoomSegment[];
-	sceneSegments?: unknown[];
+	sceneSegments?: SceneSegment[];
 	maskSegments?: unknown[];
 	textSegments?: unknown[];
 	captionSegments?: unknown[];
@@ -110,6 +117,7 @@ export function ensureTimeline(
 	const t = config.timeline;
 	t.segments ??= [];
 	t.zoomSegments ??= [];
+	t.sceneSegments ??= [];
 	return t;
 }
 
