@@ -48,6 +48,9 @@ pnpm inspect path/to/Recording.cap --json
 pnpm validate path/to/Recording.cap
 pnpm validate path/to/Recording.cap --expect-edited
 
+# If Cap.app itself still looks raw-length, bake the current timeline into a new .cap.
+pnpm bake:timeline path/to/Recording.cap --out "path/to/Recording Baked.cap"
+
 # Detect silent regions for cut candidates.
 pnpm analyze:silences path/to/Recording.cap --noise=-30 --min-duration 0.4
 pnpm analyze:silences path/to/Recording.cap --json
@@ -61,6 +64,11 @@ pnpm analyze:clicks path/to/Recording.cap --json
 # Transcribe with whisper.cpp (cached under <cap>/.transcripts/).
 pnpm analyze:transcript path/to/Recording.cap
 pnpm analyze:transcript path/to/Recording.cap --refresh --json
+
+# Sanitize microphone audio in a copied bundle to reduce noise and focus on speech.
+pnpm audio:sanitize path/to/Recording.cap
+pnpm audio:sanitize path/to/Recording.cap --preset strong
+pnpm audio:sanitize path/to/Recording.cap --include-system-audio
 
 # Extract a single frame at time T as a PNG so you can SEE the video.
 # Open the resulting PNG with an image viewer or multimodal read tool.
@@ -105,6 +113,29 @@ pnpm render path/to/Recording.cap --cli --fps 30 --compression Maximum
 ```
 
 `--cli` requires the export-cli built; if missing, the script prints the build command. CLI export only works for **studio** recordings — instant recordings already have a usable mp4 at `content/output.mp4` and `render` reports the path without re-encoding.
+
+### Audio Sanitize
+
+```bash
+pnpm audio:sanitize recordings/edited/Demo.cap
+pnpm audio:sanitize recordings/edited/Demo.cap --preset voice
+pnpm audio:sanitize recordings/edited/Demo.cap --preset strong
+pnpm audio:sanitize recordings/edited/Demo.cap --in-place
+```
+
+This is intentionally separate from the JSON-only workflow. Cap's project config has an `audio.improve` flag, but not a full speech denoise pipeline. `audio:sanitize` makes a copied `.cap` by default and re-encodes microphone audio with ffmpeg filters tuned for spoken voice. Use `--include-system-audio` only if you also want app/system audio processed.
+
+### Bake (optional, destructive-to-copy)
+
+```bash
+pnpm bake:timeline recordings/edited/Demo.cap --out "recordings/edited/Demo Baked.cap"
+```
+
+Most edits should remain JSON-only. But Cap has two duration concepts:
+- Raw editor duration comes from `recording-meta.json` + raw media via `ProjectRecordingsMeta::duration()` in `.repos/Cap/crates/rendering/src/project_recordings.rs`.
+- Render/export duration comes from `project-config.json -> timeline.segments[]` via `TimelineConfiguration::duration()` in `.repos/Cap/crates/project/src/configuration.rs`.
+
+That means a JSON-only cut can export as 5:15 while parts of Cap.app still show the original 8:20 recording duration. Use `bake:timeline` only when the opened `.cap` must itself have trimmed/speed-adjusted media duration. It creates a new `.cap`, rewrites media/cursor timing to match the current timeline, and leaves the source bundle untouched.
 
 ### Mutate (write project-config.json directly)
 
@@ -200,8 +231,9 @@ Cap.app appears to auto-save its in-memory project state when the bundle is open
 2. **Times are in seconds, float.** Output (timeline) time, not source time — Cap renders at output time.
 3. **Zoom `amount`:** 1.0 = no zoom, 1.5–1.8 is a comfortable mouse close-up, 2.0+ is aggressive.
 4. **Zoom `mode`:**
-   - `Auto` (no `--x/--y`): Cap targets the cursor at zoom start. Prefer this for mouse close-ups.
-   - `Manual { x, y }`: normalized 0..1 coords. Use for highlighting non-cursor regions.
+   - JSON must use Cap's generated lowercase shape: `"auto"` or `{ "manual": { "x": 0.5, "y": 0.5 } }`.
+   - Uppercase `"Auto"` / `{ "Manual": ... }` is wrong and may disappear when Cap.app opens the project.
+   - CLI auto mode (no `--x/--y`) asks Cap to target the cursor. Manual mode uses normalized 0..1 coords.
 5. **Don't overlap zoom segments.** `zoom:add` refuses overlaps; remove the existing segment first if intentional.
 6. **Cuts are non-destructive splits.** A cut on a single-segment timeline becomes two segments around the gap. Re-cutting the same range is a no-op (idempotent for fully-covered ranges).
 7. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.

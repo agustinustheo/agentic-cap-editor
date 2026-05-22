@@ -7,7 +7,7 @@ description: Merge multiple Cap (.cap) recordings into a single snappy product v
 
 A repeatable procedure for taking N source `.cap` bundles and producing one merged, edited `.cap` bundle that is snappy, captioned, and ready to export from Cap.app.
 
-This skill assumes the toolkit in this repo (`pnpm inspect`, `pnpm analyze:*`, `pnpm suggest:*`, `pnpm merge`, `pnpm validate`, `pnpm edit:snappy`) is available.
+This skill assumes the toolkit in this repo (`pnpm inspect`, `pnpm analyze:*`, `pnpm suggest:*`, `pnpm merge`, `pnpm validate`, `pnpm edit:snappy`, `pnpm bake:timeline`) is available.
 
 ## Inputs
 
@@ -61,6 +61,7 @@ Write the plan inline before executing it. The plan is the gate — once it's co
 - `pnpm suggest:zooms recordings/edited/<Name>.cap --apply` — punch in around click clusters.
 - `pnpm inspect recordings/edited/<Name>.cap` — verify final timeline + zooms + captions.
 - `pnpm validate recordings/edited/<Name>.cap --expect-edited` — mandatory final gate. It catches stale Cap overwrites, out-of-bounds captions/zooms, omitted recording segments, and helper files left beside `.cap` bundles.
+- If Cap.app itself still appears raw-length, run `pnpm bake:timeline recordings/edited/<Name>.cap --out "recordings/edited/<Name> Baked.cap"` and validate the baked bundle. Cap's export/playback duration comes from `timeline.segments`, but parts of the desktop editor also expose raw media `recordingDuration`.
 
 ### 6. Hand off
 Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) only after validation passes. Let the user preview / export, or use `--cli` once `pnpm render:build` has run.
@@ -70,6 +71,7 @@ Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) o
 - **When in doubt about a take, keep it.** Cuts can be added later; restoring a dropped segment requires re-merge.
 - **Don't cut across cursor activity.** If `pnpm analyze:clicks` shows a click within a proposed cut window, narrow the cut to leave at least 0.5s before and after the click.
 - **Auto zoom mode is preferred** for click-driven punch-ins (uses cursor data Cap already has). Use `--mode manual` only if cursor data is missing or the target isn't where the cursor is.
+- **Zoom JSON is lowercase.** Cap expects `mode: "auto"` or `mode: { "manual": { "x": 0.5, "y": 0.5 } }`. Uppercase `"Auto"` / `{ "Manual": ... }` will not survive the editor.
 - **Caption alignment follows the current timeline.** `captions:add` skips transcript ranges and recording segments omitted by cuts/trim, so regenerate captions after any substantial timeline change.
 
 ## Failure modes and recovery

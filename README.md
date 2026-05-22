@@ -1,6 +1,8 @@
 # agentic-cap-editor
 
-A TypeScript toolkit + agent workflow for editing [Cap](https://cap.so) screen recordings non-destructively from the CLI. Operates directly on `.cap` bundles by mutating `project-config.json` — Cap's own editor reads the same file, so any edit is immediately visible in Cap.app at export time.
+A TypeScript toolkit + agent workflow for editing [Cap](https://cap.so) screen recordings from the CLI. The normal path is non-destructive: mutate `project-config.json`, leave raw media alone, and let Cap apply those edits at preview/export time. When the Cap.app UI itself must stop showing the raw recording length, use the explicit bake step to create a new trimmed/speed-adjusted `.cap` copy.
+
+Audio cleanup is the exception. Cap's project config exposes coarse audio controls like `audio.improve`, but not a real voice-isolation pipeline. `pnpm audio:sanitize` therefore creates a new `.cap` copy by default and re-encodes microphone audio with ffmpeg voice-focused filters so we can reduce background noise and bring speech forward.
 
 The toolkit is designed so an AI agent can read a recording, decide where to cut and where to zoom, and apply those edits as JSON — without ever re-encoding video or watching frames in sequence.
 
@@ -43,11 +45,12 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 
 | Command | Purpose |
 |---|---|
-| `pnpm inspect <cap>` | Timeline, zoom, caption summary + source duration |
+| `pnpm inspect <cap>` | Timeline, zoom, caption summary, raw media duration, and export duration |
 | `pnpm analyze:silences <cap>` | ffmpeg silencedetect → cuttable ranges |
 | `pnpm analyze:cursor <cap>` | Cursor move/click counts per recording segment |
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
+| `pnpm audio:sanitize <cap>` | Create a voice-cleaned `.cap` copy by re-encoding mic audio with ffmpeg |
 | `pnpm frame <cap> --at T` | Extract a single PNG so an agent can inspect the frame visually |
 | `pnpm validate <cap>` | Verify timeline, zooms, captions, omitted segments, and edited-folder hygiene |
 
@@ -70,6 +73,7 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm merge <name> <cap1> [<cap2> ...]` | Merge N source bundles into one (with optional `--include` filters per source) |
 | `pnpm trim <cap>` | Replace timeline with explicit keep ranges |
 | `pnpm edit:snappy <cap...>` | High-level first pass: copy/merge, cut, caption, zoom, validate |
+| `pnpm bake:timeline <cap> --out <cap>` | Create a new `.cap` whose media is trimmed/speed-baked to the current timeline |
 
 ### Render
 
@@ -110,6 +114,13 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 
 ## How `.cap` editing works
 
+Cap has two duration concepts that are easy to confuse:
+
+- `recordingDuration` is computed from `recording-meta.json` and raw media durations (`ProjectRecordingsMeta::duration()` in `.repos/Cap/crates/rendering/src/project_recordings.rs`). Parts of the desktop timeline UI use this raw value.
+- Export/playback duration comes from `project-config.json -> timeline.segments[]` (`TimelineConfiguration::duration()` in `.repos/Cap/crates/project/src/configuration.rs`). Headless export and render code use this timeline duration when it exists.
+
+So an edited project can export as 5:15 while Cap.app still exposes an 8:20 raw recording duration in parts of the UI. `pnpm inspect` and `pnpm validate` print both. If the user specifically needs Cap.app to look like a 5:15 source project, run `pnpm bake:timeline` on the edited copy and open the baked `.cap`.
+
 A `.cap` file is a directory bundle:
 
 ```
@@ -131,7 +142,7 @@ The raw recordings are **never modified**. All edits live as JSON in `project-co
 The two most-edited arrays:
 
 - `timeline.segments[]` — playback ranges (`{ recordingSegment, timescale, start, end }`). Cuts are expressed as splits/removals.
-- `timeline.zoomSegments[]` — mouse close-ups (`{ start, end, amount, mode: "Auto" | { Manual: { x, y } } }`).
+- `timeline.zoomSegments[]` — mouse close-ups (`{ start, end, amount, mode: "auto" | { manual: { x, y } } }`). Cap's generated TypeScript type is lowercase; uppercase `"Auto"` / `{ "Manual": ... }` will be ignored or normalized away by the editor.
 
 ## End-to-end "make it snappy" recipe
 
