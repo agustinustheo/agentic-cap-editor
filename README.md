@@ -4,6 +4,8 @@ A TypeScript toolkit + agent workflow for editing [Cap](https://cap.so) screen r
 
 Audio cleanup is the exception. Cap's project config exposes coarse audio controls like `audio.improve`, but not a real voice-isolation pipeline. `pnpm audio:sanitize` therefore creates a new `.cap` copy by default and re-encodes microphone audio with speech-focused tooling so we can reduce background noise and bring speech forward. The main `voice` preset now uses the DeepFilterNet native binary by default, with ffmpeg `arnndn` retained as a fallback engine.
 
+For a different class of cleanup, `pnpm audio:extract-speaker` uses the Apache-2.0 ClearVoice package to isolate the dominant speaker from a mixed recording. That path is separate from denoise and is meant for cases where outside sounds still leak during active speech.
+
 The toolkit is designed so an AI agent can read a recording, decide where to cut and where to zoom, and apply those edits as JSON — without ever re-encoding video or watching frames in sequence.
 
 ## Why this exists
@@ -51,6 +53,7 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm analyze:clicks <cap>` | Every click-down with cursor position |
 | `pnpm analyze:transcript <cap>` | whisper.cpp transcript, cached to `<cap>/.transcripts/` |
 | `pnpm audio:sanitize <cap>` | Create a voice-cleaned `.cap` copy by re-encoding mic audio with ffmpeg |
+| `pnpm audio:extract-speaker <cap>` | Create a speaker-isolated `.cap` copy using ClearVoice speech separation |
 | `pnpm frame <cap> --at T` | Extract a single PNG so an agent can inspect the frame visually |
 | `pnpm validate <cap>` | Verify timeline, zooms, captions, omitted segments, and edited-folder hygiene |
 

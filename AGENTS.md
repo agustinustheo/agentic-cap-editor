@@ -76,6 +76,12 @@ pnpm audio:sanitize path/to/Recording.cap --engine ffmpeg --mix 0.9
 pnpm audio:sanitize path/to/Recording.cap --engine ffmpeg --model /path/to/std.rnnn
 pnpm audio:sanitize path/to/Recording.cap --include-system-audio
 
+# Extract the dominant speaker into a copied bundle using ClearVoice speech separation.
+pnpm audio:extract-speaker path/to/Recording.cap
+pnpm audio:extract-speaker path/to/Recording.cap --keep-stem 1
+pnpm audio:extract-speaker path/to/Recording.cap --keep-stem 2
+pnpm audio:extract-speaker path/to/Recording.cap --in-place
+
 # Extract a single frame at time T as a PNG so you can SEE the video.
 # Open the resulting PNG with an image viewer or multimodal read tool.
 pnpm frame path/to/Recording.cap --at 12.5
@@ -130,9 +136,13 @@ pnpm audio:sanitize recordings/edited/Demo.cap --preset broadcast
 pnpm audio:sanitize recordings/edited/Demo.cap --post-filter --atten-lim-db 28
 pnpm audio:sanitize recordings/edited/Demo.cap --engine ffmpeg --preset voice
 pnpm audio:sanitize recordings/edited/Demo.cap --in-place
+pnpm audio:extract-speaker recordings/edited/Demo.cap
+pnpm audio:extract-speaker recordings/edited/Demo.cap --keep-stem 1
 ```
 
 This is intentionally separate from the JSON-only workflow. Cap's project config has an `audio.improve` flag, but not a full speech denoise pipeline. `audio:sanitize` makes a copied `.cap` by default and re-encodes microphone audio with speech-focused tooling. The default `voice` / `strong` / `broadcast` presets now use the native DeepFilterNet binary and auto-cache it under `~/.cache/agentic-cap-editor/deep-filter/`. `--engine ffmpeg` remains available as a fallback and uses ffmpeg's `arnndn` RNNoise path, with models cached under `~/.cache/agentic-cap-editor/arnndn/std.rnnn`. Use `--include-system-audio` only if you also want app/system audio processed.
+
+`audio:extract-speaker` is a separate workflow. It uses the Apache-2.0 ClearVoice package via `uvx --from clearvoice` and runs `speech_separation` with `MossFormer2_SS_16K`, then keeps the most voice-like stem by default. This is not the same as denoise: it is an isolation pass intended for "keep the main speaker, drop the rest" when background sounds still leak during active speech.
 
 ### Bake (optional, destructive-to-copy)
 
