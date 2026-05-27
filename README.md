@@ -74,10 +74,13 @@ All take a `.cap` path as the first positional arg. Mutating commands write a ti
 | `pnpm zoom:add <cap>` | Add a single zoom (`--start --end --amount [--x --y]`) |
 | `pnpm zoom:list <cap>` | List current zooms |
 | `pnpm zoom:remove <cap> <idx>` | Remove a zoom by index |
+| `pnpm zooms:set <cap>` | Replace all zooms from a JSON array (`--from-json /tmp/zooms.json`) |
 | `pnpm scene:add <cap>` | Add a scene segment (`--start --end --mode hideCamera|cameraOnly|default`) |
 | `pnpm scene:list <cap>` | List current scene segments |
 | `pnpm scene:remove <cap> <idx>` | Remove a scene segment by index |
+| `pnpm scenes:set <cap>` | Replace all scene segments from a JSON array (`--from-json /tmp/scenes.json`) |
 | `pnpm cut <cap>` | Cut a single range from the timeline |
+| `pnpm source:cuts <cap>` | Apply source-time batch cuts and retime zooms/scenes/captions (`--from-json /tmp/source-cuts.json`) |
 | `pnpm captions:add <cap>` | Write transcript as Cap captions |
 | `pnpm merge <name> <cap1> [<cap2> ...]` | Merge N source bundles into one (with optional `--include` filters per source) |
 | `pnpm trim <cap>` | Replace timeline with explicit keep ranges |
@@ -165,6 +168,8 @@ The two most-edited arrays:
 7. `pnpm suggest:zooms recordings/edited/Demo.cap --apply` — punch in on click clusters.
 8. `pnpm validate recordings/edited/Demo.cap --expect-edited` — verify final timeline, zooms, captions, and no stray helper files.
 9. `pnpm render recordings/edited/Demo.cap` — open in Cap.app to preview / export.
+
+For manual cleanup of stutters, repeated phrases, or short awkward silences, prefer `pnpm source:cuts` over repeated `pnpm cut` calls. It cuts in recording-source time and shifts downstream zooms/scenes/captions so later edits do not drift.
 
 To merge multiple takes into one bundle first, use `pnpm merge`. See `.codex/skills/cap-merge/SKILL.md` for the full procedure.
 

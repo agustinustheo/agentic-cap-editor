@@ -70,7 +70,10 @@ Open the merged bundle in Cap.app (`pnpm render recordings/edited/<Name>.cap`) o
 
 - **When in doubt about a take, keep it.** Cuts can be added later; restoring a dropped segment requires re-merge.
 - **Don't cut across cursor activity.** If `pnpm analyze:clicks` shows a click within a proposed cut window, narrow the cut to leave at least 0.5s before and after the click.
-- **Auto zoom mode is preferred** for click-driven punch-ins (uses cursor data Cap already has). Use `--mode manual` only if cursor data is missing or the target isn't where the cursor is.
+- **Edge/corner UI targets should stay on the edge.** If the edit is about clicking Settings, opening Runbooks/Incidents, clicking a top-right New button, or showing bottom-right logs/results, use manual targets near the actual edge/corner (`x=0/1`, `y=0/1`) instead of drifting toward the center of the full video.
+- **Moving cursor zooms should keep the cursor centered in the crop.** This is not the same as putting the UI object in the middle of the full video. If the cursor travels during the zoom, split the zoom or use manual targets so the cursor remains near the middle of the visible zoomed region.
+- **Auto zoom mode is only a first pass** for click-driven punch-ins (uses cursor data Cap already has). Replace it with manual edge/cursor targets whenever `analyze:zooms` shows drift, edge targets, or large cursor travel.
+- **Verify zooms visually after applying.** Run `pnpm analyze:zooms <cap> --out /tmp/zoom-check` and inspect the changed simulated crops before calling the edit complete.
 - **Zoom JSON is lowercase.** Cap expects `mode: "auto"` or `mode: { "manual": { "x": 0.5, "y": 0.5 } }`. Uppercase `"Auto"` / `{ "Manual": ... }` will not survive the editor.
 - **Caption alignment follows the current timeline.** `captions:add` skips transcript ranges and recording segments omitted by cuts/trim, so regenerate captions after any substantial timeline change.
 

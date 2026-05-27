@@ -184,14 +184,20 @@ pnpm zoom:add path/to/Recording.cap --start 5.0 --end 8.0 --amount 1.5 --dry-run
 
 pnpm zoom:list path/to/Recording.cap
 pnpm zoom:remove path/to/Recording.cap 2
+pnpm zooms:set path/to/Recording.cap --from-json /tmp/zooms.json
 
 pnpm scene:add path/to/Recording.cap --start 12.0 --end 18.0 --mode hideCamera
 pnpm scene:add path/to/Recording.cap --start 42.0 --end 46.0 --mode cameraOnly
 pnpm scene:list path/to/Recording.cap
 pnpm scene:remove path/to/Recording.cap 0
+pnpm scenes:set path/to/Recording.cap --from-json /tmp/scenes.json
 
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0
 pnpm cut path/to/Recording.cap --start 5.0 --end 8.0 --dry-run
+
+# Apply multiple cuts in recording-source time and retime zooms/scenes/captions.
+# Use this for transcript/audio cleanup so later zooms do not drift out of sync.
+pnpm source:cuts path/to/Recording.cap --from-json /tmp/source-cuts.json
 
 # Replace the timeline with explicit keep ranges. Keep helper JSON in /tmp,
 # never beside .cap bundles in recordings/edited/.
@@ -278,13 +284,18 @@ Cap.app appears to auto-save its in-memory project state when the bundle is open
    - JSON must use Cap's generated lowercase shape: `"auto"` or `{ "manual": { "x": 0.5, "y": 0.5 } }`.
    - Uppercase `"Auto"` / `{ "Manual": ... }` is wrong and may disappear when Cap.app opens the project.
    - CLI auto mode (no `--x/--y`) asks Cap to target the cursor. Manual mode uses normalized 0..1 coords.
-5. **Don't overlap zoom segments.** `zoom:add` refuses overlaps; remove the existing segment first if intentional.
-6. **Cuts are non-destructive splits.** A cut on a single-segment timeline becomes two segments around the gap. Re-cutting the same range is a no-op (idempotent for fully-covered ranges).
-7. **Scene mode uses Cap enum strings.** Scene JSON must use `"default"`, `"cameraOnly"`, or `"hideCamera"`. Use `hideCamera` when prompt entry or dense screen content needs the facecam out of the way temporarily.
-8. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.
-9. **Don't touch `recording-meta.json` or `content/`.** Those are recording artifacts. Only `project-config.json` is editable unless you are intentionally using the separate audio tooling.
-10. **Always `pnpm validate --expect-edited` before final.** If validation warns about omitted segments or Cap.app running, say so explicitly or fix it.
-11. **No helper files in `recordings/edited/`.** Use `/tmp/*.json` for keep ranges and screenshots. The user expects only `.cap` bundles at the top level.
+5. **Edge UI zooms go to the edge.** If the subject is a sidebar item, top bar button, bottom log panel, or corner control, put the manual target on that edge/corner. Do not soften it back toward the middle just because the frame is large. Use values near `x=0` for left, `x=1` for right, `y=0` for top, and `y=1` for bottom when the UI target is actually on the edge.
+6. **Moving cursor zooms keep the cursor centered.** When the cursor is traveling, the crop should track so the cursor stays near the middle of the visible zoomed region. This is different from centering the UI object in the full video. If an auto zoom drifts or leaves the cursor far from the crop center, split the zoom or use manual targets/key moments so the cursor stays readable.
+7. **Verify zooms after applying.** After any manual zoom edit, run `pnpm analyze:zooms <cap> --out /tmp/zoom-check`, open the simulated crops for the changed zooms, and confirm the edge/corner/cursor behavior visually before saying the edit is good.
+8. **Use `source:cuts` for editorial audio cleanup.** When removing stutters, repeated phrases, or short dead air, prefer source-time cuts over repeated output-time `cut` calls. `source:cuts` rebuilds timeline segments and retimes zooms/scenes/captions so the rest of the edit stays synchronized.
+9. **Verify editorial cuts against stitched output audio.** Raw `analyze:transcript` is per recording segment and will still show words that are cut out of the timeline. For final proof, render/inspect a stitched timeline audio preview or use transition previews.
+10. **Don't overlap zoom segments.** `zoom:add` refuses overlaps; remove the existing segment first if intentional.
+11. **Cuts are non-destructive splits.** A cut on a single-segment timeline becomes two segments around the gap. Re-cutting the same range is a no-op (idempotent for fully-covered ranges).
+12. **Scene mode uses Cap enum strings.** Scene JSON must use `"default"`, `"cameraOnly"`, or `"hideCamera"`. Use `hideCamera` when prompt entry or dense screen content needs the facecam out of the way temporarily.
+13. **Backups exist.** `project-config.json.<timestamp>.bak` is written on each save. To roll back, copy the `.bak` back.
+14. **Don't touch `recording-meta.json` or `content/`.** Those are recording artifacts. Only `project-config.json` is editable unless you are intentionally using the separate audio tooling.
+15. **Always `pnpm validate --expect-edited` before final.** If validation warns about omitted segments or Cap.app running, say so explicitly or fix it.
+16. **No helper files in `recordings/edited/`.** Use `/tmp/*.json` for keep ranges and screenshots. The user expects only `.cap` bundles at the top level.
 
 ## When to extend the toolkit
 
